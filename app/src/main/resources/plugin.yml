@@ -1,0 +1,8 @@
+name: DSC
+version: '${version}'
+main: me.st4r.DSC.DSC
+api-version: '1.21'
+commands:
+  pledge:
+    description: Create and manage soul pledges.
+    usage: /pledge

@@ -91,6 +91,14 @@ public class SoulManager {
         return karma != null && karma < CORRUPTION_THRESHOLD;
     }
 
+    public int getKarma(ItemStack item) {
+        if (!soulItem.isSoul(item)) return 0;
+        ItemMeta meta = item.getItemMeta();
+        if (meta == null) return 0;
+
+        return meta.getPersistentDataContainer().getOrDefault(karmaKey, PersistentDataType.INTEGER, 0);
+    }
+
     public boolean isShattered(ItemStack item) {
         if (!soulItem.isSoul(item)) return false;
         ItemMeta meta = item.getItemMeta();
