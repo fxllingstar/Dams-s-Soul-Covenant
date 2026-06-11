@@ -31,7 +31,7 @@ public enum SoulType{
         return color;
     }
 
-    public int getDefauktKarma(){
+    public int getDefaultKarma(){
         return defaultKarma;
     }
 
