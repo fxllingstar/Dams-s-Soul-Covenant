@@ -18,15 +18,17 @@ import java.util.UUID;
 public class SoulItem {
     
 
+    private final DSC plugin;
     private final NamespacedKey typeKey;
     private final NamespacedKey karmaKey;
     private final NamespacedKey holderKey;
-
+    private final NamespacedKey shatteredKey;
     public SoulItem(DSC plugin){
+        this.plugin = plugin;
         this.typeKey = new NamespacedKey(plugin, "soul_type");
         this.karmaKey = new NamespacedKey(plugin, "soul_karma");
         this.holderKey = new NamespacedKey(plugin, "soul_holder");
-
+        this.shatteredKey = new NamespacedKey(plugin, "soul_shattered");
     }
 
     //================================
