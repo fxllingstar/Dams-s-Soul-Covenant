@@ -1,8 +1,6 @@
 package me.st4r.DSC.soul;
 
 import me.st4r.DSC.DSC;
-import me.st4r.DSC.soul.SoulManager;
-import me.st4r.DSC.soul.SoulType;
 import org.bukkit.Bukkit;
 import org.bukkit.Color;
 import org.bukkit.Location;
