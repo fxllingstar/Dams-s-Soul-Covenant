@@ -7,7 +7,6 @@ import me.st4r.DSC.soul.SoulManager;
 import me.st4r.DSC.soul.SoulType;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
-import org.bukkit.entity.EntityCategory;
 import org.bukkit.entity.Item;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
@@ -22,7 +21,7 @@ import org.bukkit.inventory.ItemStack;
 import java.util.Map;
 import java.util.UUID;
 
-@SuppressWarnings("deprecation")
+
 public class SoulDropListener implements Listener {
     
     private final DSC plugin;
