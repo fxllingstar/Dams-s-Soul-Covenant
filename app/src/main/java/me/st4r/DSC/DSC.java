@@ -22,4 +22,11 @@ public final class DSC extends JavaPlugin {
 
     public SoulItem getSoulItem() { return soulItem; }
     public SoulManager getSoulManager() { return soulManager; }
+
+
+
+    @Override
+    public void onDisable(){
+        getLogger().info("Bye! DSC is gone now :<");
+    }
 }
