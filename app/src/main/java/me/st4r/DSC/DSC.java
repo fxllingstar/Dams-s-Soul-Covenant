@@ -8,6 +8,8 @@ import me.st4r.DSC.pledge.PledgeManager;
 import me.st4r.DSC.soul.SoulItem;
 import me.st4r.DSC.soul.SoulManager;
 import me.st4r.DSC.soul.SoulParticleTask;
+import me.st4r.DSC.soul.SoulRegistery;
+import me.st4r.DSC.tracker.KindnessTracker;
 import me.st4r.DSC.tracker.BraveryTracker;
 import me.st4r.DSC.tracker.DeterminationTracker;
 import me.st4r.DSC.tracker.IntegrityTracker;
@@ -17,12 +19,14 @@ import me.st4r.DSC.tracker.PerseveranceTracker;
 import me.st4r.DSC.world.FractureHandler;
 import me.st4r.DSC.world.ResonanceHandler;
 import me.st4r.DSC.world.SoulStateManager;
+
 import org.bukkit.command.PluginCommand;
 import org.bukkit.plugin.java.JavaPlugin;
 
 public final class DSC extends JavaPlugin {
 
     private SoulItem soulItem;
+    private SoulRegistery soulRegistery;
     private SoulManager soulManager;
     private BraveryTracker braveryTracker;
     private DeterminationTracker determinationTracker;
@@ -35,11 +39,13 @@ public final class DSC extends JavaPlugin {
     private FractureHandler fractureHandler;
     private ResonanceHandler resonanceHandler;
     private PassiveEffectTask passiveEffectTask;
+    private KindnessTracker kindnessTracker;
 
     @Override
     public void onEnable() {
         getLogger().info("Hello! DSC is here :>");
         this.soulItem = new SoulItem(this);
+        this.soulRegistery = new SoulRegistery(this);
         this.soulManager = new SoulManager(this);
         this.braveryTracker = new BraveryTracker();
         this.determinationTracker = new DeterminationTracker();
@@ -53,11 +59,13 @@ public final class DSC extends JavaPlugin {
         this.fractureHandler = new FractureHandler();
         this.resonanceHandler = new ResonanceHandler();
         this.soulStateManager.setHandlers(fractureHandler, resonanceHandler);
+        this.kindnessTracker = new KindnessTracker(this);
         this.passiveEffectTask = new PassiveEffectTask(this);
         getServer().getPluginManager().registerEvents(new SoulDropListener(this), this);
         getServer().getPluginManager().registerEvents(new SoulPickUpListener(this), this);
         getServer().getPluginManager().registerEvents(fractureHandler, this);
         getServer().getPluginManager().registerEvents(resonanceHandler, this);
+        getServer().getPluginManager().registerEvents(kindnessTracker, this);
         registerPledgeCommand();
         new SoulParticleTask(this).runTaskTimer(this, 20L, 15L);
         this.passiveEffectTask.start();
@@ -65,6 +73,7 @@ public final class DSC extends JavaPlugin {
     }
 
     public SoulItem getSoulItem() { return soulItem; }
+    public SoulRegistery getSoulRegistery() { return soulRegistery; }
     public SoulManager getSoulManager() { return soulManager; }
     public BraveryTracker getBraveryTracker() { return braveryTracker; }
     public DeterminationTracker getDeterminationTracker() { return determinationTracker; }
@@ -76,6 +85,7 @@ public final class DSC extends JavaPlugin {
     public SoulStateManager getSoulStateManager() { return soulStateManager; }
     public FractureHandler getFractureHandler() { return fractureHandler; }
     public ResonanceHandler getResonanceHandler() { return resonanceHandler; }
+    public KindnessTracker getKindnessTracker() { return kindnessTracker; }
 
     private void registerPledgeCommand() {
         PluginCommand pledgeCommand = getCommand("pledge");

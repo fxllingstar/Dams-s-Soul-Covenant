@@ -24,7 +24,7 @@ public class SoulManager {
     private final NamespacedKey shatteredKey;
     private final NamespacedKey karmaKey;
     private final NamespacedKey holderKey;
-    public static final int CORRUPTION_THRESHOLD = 0;
+    public static final int CORRUPTION_THRESHOLD = -5;
 
     public SoulManager(DSC plugin) {
         this.plugin = plugin;

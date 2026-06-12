@@ -2,6 +2,9 @@ package me.st4r.DSC.world;
 
 import me.st4r.DSC.world.SoulStateManager.SoulState;
 import me.st4r.DSC.world.SoulStateManager.SoulStateSnapshot;
+import org.bukkit.GameRule;
+import org.bukkit.NamespacedKey;
+import org.bukkit.Registry;
 import org.bukkit.World;
 import org.bukkit.entity.Animals;
 import org.bukkit.entity.Monster;
@@ -19,20 +22,52 @@ import org.bukkit.potion.PotionEffectType;
 public class FractureHandler implements Listener {
 
     private SoulState currentState = SoulState.HEALTHY;
+    private SoulState previousState = SoulState.HEALTHY;
 
     public void applySoulState(SoulStateSnapshot snapshot) {
+        previousState = currentState;
         currentState = snapshot.state();
+
+        if (currentState != previousState) {
+            handleStateTransition(previousState, currentState);
+        }
+
+        if (currentState == SoulState.FRACTURE) {
+            for (World world : org.bukkit.Bukkit.getWorlds()) {
+                if (!isOverworld(world)) continue;
+                world.setTime(18_000L);
+                world.setStorm(true);
+                world.setWeatherDuration(Integer.MAX_VALUE);
+                world.setThunderDuration(Integer.MAX_VALUE);
+            }
+        }
 
         for (World world : org.bukkit.Bukkit.getWorlds()) {
             if (!isOverworld(world)) continue;
-
-            if (currentState == SoulState.FRACTURE) {
-                world.setTime(18_000L);
-                world.setStorm(true);
-            }
-
             for (Player player : world.getPlayers()) {
                 applyPlayerAtmosphere(player);
+            }
+        }
+    }
+
+    private void handleStateTransition(SoulState from, SoulState to) {
+
+        if (to == SoulState.FRACTURE) {
+            for (World world : org.bukkit.Bukkit.getWorlds()) {
+                if (!isOverworld(world)) continue;
+                world.setGameRule(GameRule.DO_DAYLIGHT_CYCLE, false);
+            }
+            return;
+        }
+
+       
+        if (from == SoulState.FRACTURE) {
+            for (World world : org.bukkit.Bukkit.getWorlds()) {
+                if (!isOverworld(world)) continue;
+                world.setGameRule(GameRule.DO_DAYLIGHT_CYCLE, true);
+                world.setStorm(false);
+                world.setWeatherDuration(0);
+                world.setThunderDuration(0);
             }
         }
     }
@@ -64,12 +99,14 @@ public class FractureHandler implements Listener {
         if (!isOverworld(event.getLocation().getWorld())) return;
 
         if (event.getEntity() instanceof Monster monster && isDegradedOrWorse()) {
-            PotionEffectType strength = PotionEffectType.getByName("STRENGTH");
-            if (strength == null) {
-                strength = PotionEffectType.getByName("INCREASE_DAMAGE");
-            }
+            PotionEffectType strength = Registry.EFFECT.get(NamespacedKey.minecraft("strength"));
             if (strength != null) {
-                monster.addPotionEffect(new PotionEffect(strength, Integer.MAX_VALUE, currentState == SoulState.FRACTURE ? 1 : 0, true, false, false));
+                monster.addPotionEffect(new PotionEffect(
+                    strength,
+                    Integer.MAX_VALUE,
+                    currentState == SoulState.FRACTURE ? 1 : 0,
+                    true, false, false
+                ));
             }
         }
     }
@@ -85,7 +122,7 @@ public class FractureHandler implements Listener {
     }
 
     private void applyPlayerAtmosphere(Player player) {
-        PotionEffectType darkness = PotionEffectType.getByName("DARKNESS");
+        PotionEffectType darkness = Registry.EFFECT.get(NamespacedKey.minecraft("darkness"));
         if (darkness == null) return;
 
         if (currentState == SoulState.FRACTURE) {

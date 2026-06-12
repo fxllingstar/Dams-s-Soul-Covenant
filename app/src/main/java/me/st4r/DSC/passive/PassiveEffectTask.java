@@ -2,6 +2,7 @@ package me.st4r.DSC.passive;
 
 import me.st4r.DSC.DSC;
 import me.st4r.DSC.passive.effects.BraveryPassive;
+import me.st4r.DSC.passive.effects.KindnessPassive;
 import me.st4r.DSC.passive.effects.DeterminationPassive;
 import me.st4r.DSC.passive.effects.IntegrityPassive;
 import me.st4r.DSC.passive.effects.JusticePassive;
@@ -37,6 +38,7 @@ public class PassiveEffectTask {
     private final PerseverancePassive perseverancePassive;
     private final PatiencePassive patiencePassive;
     private final IntegrityPassive integrityPassive;
+    private final KindnessPassive kindnessPassive;
 
     public PassiveEffectTask(DSC plugin) {
         this.plugin = plugin;
@@ -50,6 +52,7 @@ public class PassiveEffectTask {
         this.perseverancePassive = new PerseverancePassive(support, plugin.getPerseveranceTracker());
         this.patiencePassive = new PatiencePassive(support, plugin.getPatienceTracker());
         this.integrityPassive = new IntegrityPassive(support, plugin.getIntegrityTracker());
+        this.kindnessPassive = new KindnessPassive(support, soulItem, soulManager);
     }
 
     public void start() {
@@ -71,7 +74,7 @@ public class PassiveEffectTask {
 
             ItemStack heldSoul = findSoulInInventory(holder, type);
             if (heldSoul == null) continue;
-            if (soulManager.isShattered(heldSoul) || soulManager.isCorrupted(heldSoul)) continue;
+            if (soulManager.isShattered(heldSoul)) continue;
 
             switch (type) {
                 case DETERMINATION -> determinationPassive.apply(holder);
@@ -80,7 +83,7 @@ public class PassiveEffectTask {
                 case PERSEVERANCE -> perseverancePassive.apply(holder, now);
                 case PATIENCE -> patiencePassive.apply(holder, now);
                 case INTEGRITY -> integrityPassive.apply(holder);
-                case KINDNESS -> { }
+                case KINDNESS -> kindnessPassive.apply(holder);
             }
         }
     }

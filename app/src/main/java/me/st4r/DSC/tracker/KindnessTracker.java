@@ -35,6 +35,8 @@ import java.util.UUID;
 
 public class KindnessTracker implements Listener {
 
+    private static final int OFFENSIVE_USE_THRESHOLD = 10;
+
     private final DSC plugin;
     private final SoulItem soulItem;
     private final SoulManager soulManager;
@@ -70,8 +72,9 @@ public class KindnessTracker implements Listener {
         if (!(potion.getShooter() instanceof Player rescuer)) return;
 
    
-        boolean isHealingPotion = potion.getEffects().stream().anyMatch(effect -> 
-                effect.getType().equals(PotionEffectType.REGENERATION) || effect.getType().equals(PotionEffectType.REGENERATION));
+        boolean isHealingPotion = potion.getEffects().stream().anyMatch(effect ->
+                effect.getType().equals(PotionEffectType.REGENERATION)
+                        || effect.getType().equals(PotionEffectType.INSTANT_HEALTH));
         if (!isHealingPotion) return;
 
         for (Entity entity : event.getAffectedEntities()) {
@@ -260,7 +263,7 @@ public class KindnessTracker implements Listener {
             var pdc = meta.getPersistentDataContainer();
             int violations = pdc.getOrDefault(offensiveUsesKey, PersistentDataType.INTEGER, 0) + 1;
 
-            if (violations >= 10) {
+            if (violations >= OFFENSIVE_USE_THRESHOLD) {
                 soulManager.shatter(weapon);
                 attacker.sendMessage("§4✕ Your repeated malice has overextended and shattered the Soul of Kindness. ✕");
             } else {
