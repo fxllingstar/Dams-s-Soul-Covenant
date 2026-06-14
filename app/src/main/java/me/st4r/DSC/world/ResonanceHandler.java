@@ -9,6 +9,8 @@ import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerPortalEvent;
 
+@SuppressWarnings("deprecation")
+
 public class ResonanceHandler implements Listener {
 
     private SoulStateSnapshot currentSnapshot;

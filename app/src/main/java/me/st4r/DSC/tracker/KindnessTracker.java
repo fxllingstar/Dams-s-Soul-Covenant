@@ -33,6 +33,8 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 
+@SuppressWarnings("deprecation")
+
 public class KindnessTracker implements Listener {
 
     private static final int OFFENSIVE_USE_THRESHOLD = 10;

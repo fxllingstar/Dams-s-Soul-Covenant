@@ -11,6 +11,7 @@ import org.bukkit.potion.PotionEffectType;
 import java.util.Arrays;
 import java.util.Objects;
 
+@SuppressWarnings("deprecation")
 public final class PassiveEffectSupport {
 
     private static final int PASSIVE_DURATION_TICKS = 100;

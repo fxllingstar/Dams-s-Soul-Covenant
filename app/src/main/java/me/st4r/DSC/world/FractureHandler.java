@@ -19,6 +19,7 @@ import org.bukkit.event.entity.EntitySpawnEvent;
 import org.bukkit.potion.PotionEffect;
 import org.bukkit.potion.PotionEffectType;
 
+@SuppressWarnings("deprecation")
 public class FractureHandler implements Listener {
 
     private SoulState currentState = SoulState.HEALTHY;
