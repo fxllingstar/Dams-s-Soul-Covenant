@@ -1,8 +1,8 @@
 package me.st4r.DSC.soul;
 
-
 import me.st4r.DSC.DSC;
 import org.bukkit.Bukkit;
+import org.bukkit.ChatColor;
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
 import org.bukkit.inventory.ItemStack;
@@ -16,14 +16,14 @@ import java.util.UUID;
 
 @SuppressWarnings("deprecation")
 public class SoulItem {
-    
 
     private final DSC plugin;
     private final NamespacedKey typeKey;
     private final NamespacedKey karmaKey;
     private final NamespacedKey holderKey;
     private final NamespacedKey shatteredKey;
-    public SoulItem(DSC plugin){
+
+    public SoulItem(DSC plugin) {
         this.plugin = plugin;
         this.typeKey = new NamespacedKey(plugin, "soul_type");
         this.karmaKey = new NamespacedKey(plugin, "soul_karma");
@@ -31,10 +31,7 @@ public class SoulItem {
         this.shatteredKey = new NamespacedKey(plugin, "soul_shattered");
     }
 
-    //================================
-    //Method to generate a Soul item
-    //=================================
-    public ItemStack create(SoulType type){
+    public ItemStack create(SoulType type) {
         ItemStack item = new ItemStack(Material.NETHER_STAR);
         ItemMeta meta = item.getItemMeta();
         if (meta == null) return item;
@@ -46,8 +43,6 @@ public class SoulItem {
         pdc.set(karmaKey, PersistentDataType.INTEGER, type.getDefaultKarma());
 
         item.setItemMeta(meta);
-
-
         return updateItemDisplay(item, type, type.getDefaultKarma(), null);
     }
 
@@ -56,17 +51,29 @@ public class SoulItem {
         return item.getItemMeta().getPersistentDataContainer().has(typeKey, PersistentDataType.STRING);
     }
 
-    public SoulType getSoulType(ItemStack item){
-        if (!isSoul(item)) return null;
-        String typeStr = item.getItemMeta().getPersistentDataContainer().get(typeKey, PersistentDataType.STRING);
+    public UUID getHolder(ItemStack item) {
+        if (!isSoul(item) || !item.hasItemMeta()) return null;
+        String holderStr = item.getItemMeta().getPersistentDataContainer().get(holderKey, PersistentDataType.STRING);
+        if (holderStr == null) return null;
+
         try {
-            return SoulType.valueOf(typeStr);
-        } catch (IllegalArgumentException | NullPointerException e){
+            return UUID.fromString(holderStr);
+        } catch (IllegalArgumentException exception) {
             return null;
         }
     }
 
-    public ItemStack modifySoulStack(ItemStack item, int newKarma, UUID newHolder){
+    public SoulType getSoulType(ItemStack item) {
+        if (!isSoul(item)) return null;
+        String typeStr = item.getItemMeta().getPersistentDataContainer().get(typeKey, PersistentDataType.STRING);
+        try {
+            return SoulType.valueOf(typeStr);
+        } catch (IllegalArgumentException | NullPointerException exception) {
+            return null;
+        }
+    }
+
+    public ItemStack modifySoulStack(ItemStack item, int newKarma, UUID newHolder) {
         SoulType type = getSoulType(item);
         if (type == null) return item;
 
@@ -76,9 +83,9 @@ public class SoulItem {
         PersistentDataContainer pdc = meta.getPersistentDataContainer();
         pdc.set(karmaKey, PersistentDataType.INTEGER, newKarma);
 
-        if (newHolder != null){
+        if (newHolder != null) {
             pdc.set(holderKey, PersistentDataType.STRING, newHolder.toString());
-        }else {
+        } else {
             pdc.remove(holderKey);
         }
 
@@ -86,27 +93,24 @@ public class SoulItem {
         return updateItemDisplay(item, type, newKarma, newHolder);
     }
 
-    private ItemStack updateItemDisplay(ItemStack item, SoulType type, int karma, UUID holderUUID){
+    private ItemStack updateItemDisplay(ItemStack item, SoulType type, int karma, UUID holderUUID) {
         ItemMeta meta = item.getItemMeta();
         if (meta == null) return item;
 
         List<String> lore = new ArrayList<>();
         lore.add(type.getColor() + "Soul");
         lore.add("");
-        lore.add("§7Karma State: " + (karma >= 0 ? "§a" : "§c") + karma);
-        
+        lore.add(ChatColor.GRAY + "Karma State: " + (karma >= 0 ? ChatColor.GREEN : ChatColor.RED) + (karma >= 0 ? "+" : "") + karma);
+
         String holderName = "None";
-        if (holderUUID != null){
+        if (holderUUID != null) {
             var player = Bukkit.getOfflinePlayer(holderUUID);
             holderName = player.getName() != null ? player.getName() : holderUUID.toString();
         }
-        lore.add("§7Current Holder: §f" + holderName);
+        lore.add(ChatColor.GRAY + "Current Holder: " + ChatColor.WHITE + holderName);
 
         meta.setLore(lore);
         item.setItemMeta(meta);
         return item;
-   
     }
-
-
 }

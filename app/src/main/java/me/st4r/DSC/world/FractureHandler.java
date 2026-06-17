@@ -14,6 +14,7 @@ import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.BlockGrowEvent;
+import org.bukkit.event.block.BlockFertilizeEvent;
 import org.bukkit.event.entity.CreatureSpawnEvent;
 import org.bukkit.event.entity.EntitySpawnEvent;
 import org.bukkit.potion.PotionEffect;
@@ -96,8 +97,22 @@ public class FractureHandler implements Listener {
     }
 
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
+    public void onBlockFertilize(BlockFertilizeEvent event) {
+        if (!isOverworld(event.getBlock().getWorld())) return;
+
+        if (currentState == SoulState.FRACTURE) {
+            event.setCancelled(true);
+        }
+    }
+
+    @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
     public void onCreatureSpawn(CreatureSpawnEvent event) {
         if (!isOverworld(event.getLocation().getWorld())) return;
+
+        if (currentState == SoulState.FRACTURE && event.getEntity() instanceof Animals) {
+            event.setCancelled(true);
+            return;
+        }
 
         if (event.getEntity() instanceof Monster monster && isDegradedOrWorse()) {
             PotionEffectType strength = Registry.EFFECT.get(NamespacedKey.minecraft("strength"));

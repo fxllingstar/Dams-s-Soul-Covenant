@@ -5,6 +5,7 @@ import me.st4r.DSC.soul.SoulItem;
 import me.st4r.DSC.soul.SoulManager;
 import me.st4r.DSC.soul.SoulType;
 import org.bukkit.Bukkit;
+import org.bukkit.entity.Item;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.scheduler.BukkitTask;
@@ -93,6 +94,10 @@ public class SoulStateManager {
         return currentSnapshot.state() == SoulState.FRACTURE;
     }
 
+    public boolean isSoulPresent(SoulType type) {
+        return findTrackedSoul(type) != null;
+    }
+
     public SoulStateSnapshot evaluateNow() {
         Map<SoulType, Integer> karmaBySoul = new EnumMap<>(SoulType.class);
         Map<SoulType, Boolean> corruptedBySoul = new EnumMap<>(SoulType.class);
@@ -151,14 +156,23 @@ public class SoulStateManager {
 
     private ItemStack findTrackedSoul(SoulType type) {
         UUID holderUUID = soulManager.getHolder(type);
-        if (holderUUID == null) return null;
+        if (holderUUID != null) {
+            Player holder = Bukkit.getPlayer(holderUUID);
+            if (holder != null && holder.isOnline()) {
+                for (ItemStack item : holder.getInventory().getContents()) {
+                    if (item != null && soulItem.isSoul(item) && soulItem.getSoulType(item) == type) {
+                        return item;
+                    }
+                }
+            }
+        }
 
-        Player holder = Bukkit.getPlayer(holderUUID);
-        if (holder == null || !holder.isOnline()) return null;
-
-        for (ItemStack item : holder.getInventory().getContents()) {
-            if (item != null && soulItem.isSoul(item) && soulItem.getSoulType(item) == type) {
-                return item;
+        for (var world : Bukkit.getWorlds()) {
+            for (Item itemEntity : world.getEntitiesByClass(Item.class)) {
+                ItemStack stack = itemEntity.getItemStack();
+                if (stack != null && soulItem.isSoul(stack) && soulItem.getSoulType(stack) == type) {
+                    return stack;
+                }
             }
         }
 

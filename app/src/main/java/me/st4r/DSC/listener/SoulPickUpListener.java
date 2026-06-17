@@ -12,6 +12,8 @@ import org.bukkit.event.entity.EntityPickupItemEvent;
 import org.bukkit.event.player.PlayerDropItemEvent;
 import org.bukkit.inventory.ItemStack;
 
+import java.util.UUID;
+
 public class SoulPickUpListener implements Listener {
 
     private final SoulItem soulItem;
@@ -32,8 +34,13 @@ public class SoulPickUpListener implements Listener {
         SoulType type = soulItem.getSoulType(stack);
         if (type == null) return;
 
+        UUID previousHolder = soulItem.getHolder(stack);
         soulManager.setHolder(type, player.getUniqueId());
         event.getItem().setItemStack(soulItem.modifySoulStack(stack, soulManager.getKarma(stack), player.getUniqueId()));
+
+        if (previousHolder == null || !previousHolder.equals(player.getUniqueId())) {
+            soulManager.announceSoulAcquired(player, type);
+        }
     }
 
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)

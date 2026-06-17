@@ -4,6 +4,7 @@ import me.st4r.DSC.DSC;
 import me.st4r.DSC.soul.SoulItem;
 import me.st4r.DSC.soul.SoulManager;
 import me.st4r.DSC.soul.SoulType;
+import me.st4r.DSC.world.SoulStateManager;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.NamespacedKey;
@@ -42,6 +43,7 @@ public class KindnessTracker implements Listener {
     private final DSC plugin;
     private final SoulItem soulItem;
     private final SoulManager soulManager;
+    private final SoulStateManager soulStateManager;
     
     private final NamespacedKey offensiveUsesKey;
     private final NamespacedKey healthModifierKey;
@@ -58,6 +60,7 @@ public class KindnessTracker implements Listener {
         this.plugin = plugin;
         this.soulItem = plugin.getSoulItem();
         this.soulManager = plugin.getSoulManager();
+        this.soulStateManager = plugin.getSoulStateManager();
         this.offensiveUsesKey = new NamespacedKey(plugin, "kindness_offensive_uses");
         this.healthModifierKey = new NamespacedKey(plugin, "kindness_max_health");
         
@@ -104,6 +107,11 @@ public class KindnessTracker implements Listener {
     }
 
     private void manifestKindnessSoul() {
+        if (soulStateManager.isSoulPresent(SoulType.KINDNESS)) {
+            soulSpawned = true;
+            return;
+        }
+
         UUID topContributor = playerContributions.entrySet().stream()
                 .max(Map.Entry.comparingByValue())
                 .map(Map.Entry::getKey)
@@ -121,6 +129,10 @@ public class KindnessTracker implements Listener {
 
         if (winner != null && winner.isOnline()) {
             Map<Integer, ItemStack> overflow = winner.getInventory().addItem(kindnessSoul);
+            if (overflow.isEmpty()) {
+                soulManager.setHolder(SoulType.KINDNESS, winner.getUniqueId());
+                soulManager.announceSoulAcquired(winner, SoulType.KINDNESS);
+            }
             if (!overflow.isEmpty()) {
                 winner.getWorld().dropItemNaturally(winner.getLocation(), kindnessSoul);
             }

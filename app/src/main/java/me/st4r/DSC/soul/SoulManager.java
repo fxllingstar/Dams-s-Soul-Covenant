@@ -4,6 +4,7 @@ import me.st4r.DSC.DSC;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.NamespacedKey;
+import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.persistence.PersistentDataContainer;
@@ -35,10 +36,6 @@ public class SoulManager {
         this.holderKey = new NamespacedKey(plugin, "soul_holder");
     }
 
-    /* ==========================================
-       1. HOLDER / REGISTRY TRACKING METHODS
-       ========================================== */
-
     public void setHolder(SoulType type, UUID playerUUID) {
         if (playerUUID == null) {
             activeHolders.remove(type);
@@ -49,6 +46,19 @@ public class SoulManager {
 
     public UUID getHolder(SoulType type) {
         return activeHolders.get(type);
+    }
+
+    public UUID getHolder(ItemStack item) {
+        if (!soulItem.isSoul(item) || !item.hasItemMeta()) return null;
+
+        String holderStr = item.getItemMeta().getPersistentDataContainer().get(holderKey, PersistentDataType.STRING);
+        if (holderStr == null) return null;
+
+        try {
+            return UUID.fromString(holderStr);
+        } catch (IllegalArgumentException exception) {
+            return null;
+        }
     }
 
     public SoulType getSoulOfPlayer(UUID playerUUID) {
@@ -71,10 +81,6 @@ public class SoulManager {
         return Collections.unmodifiableMap(activeHolders);
     }
 
-    /* ==========================================
-       2. KARMA & CORRUPTION MUTATION METHODS
-       ========================================== */
-
     public ItemStack addKarma(ItemStack item, int amount) {
         return modifyKarmaValue(item, amount);
     }
@@ -87,7 +93,7 @@ public class SoulManager {
         if (!soulItem.isSoul(item) || isShattered(item)) return false;
         ItemMeta meta = item.getItemMeta();
         if (meta == null) return false;
-        
+
         Integer karma = meta.getPersistentDataContainer().get(karmaKey, PersistentDataType.INTEGER);
         return karma != null && karma < CORRUPTION_THRESHOLD;
     }
@@ -104,7 +110,7 @@ public class SoulManager {
         if (!soulItem.isSoul(item)) return false;
         ItemMeta meta = item.getItemMeta();
         if (meta == null) return false;
-        
+
         Byte shatteredByte = meta.getPersistentDataContainer().get(shatteredKey, PersistentDataType.BYTE);
         return shatteredByte != null && shatteredByte == (byte) 1;
     }
@@ -116,8 +122,42 @@ public class SoulManager {
 
         meta.getPersistentDataContainer().set(shatteredKey, PersistentDataType.BYTE, (byte) 1);
         item.setItemMeta(meta);
-
         return refreshVisuals(item);
+    }
+
+    public ItemStack cleanse(ItemStack item) {
+        if (!soulItem.isSoul(item)) return item;
+        ItemMeta meta = item.getItemMeta();
+        if (meta == null) return item;
+
+        PersistentDataContainer pdc = meta.getPersistentDataContainer();
+        pdc.remove(shatteredKey);
+        pdc.set(karmaKey, PersistentDataType.INTEGER, 0);
+        item.setItemMeta(meta);
+        return refreshVisuals(item);
+    }
+
+    public void resynchronizeOnlineHolders() {
+        activeHolders.clear();
+        for (Player player : Bukkit.getOnlinePlayers()) {
+            for (ItemStack item : player.getInventory().getContents()) {
+                if (item == null || !soulItem.isSoul(item)) continue;
+                SoulType type = soulItem.getSoulType(item);
+                if (type != null) {
+                    activeHolders.put(type, player.getUniqueId());
+                }
+            }
+        }
+    }
+
+    public void announceSoulAcquired(Player player, SoulType type) {
+        if (player == null || type == null) return;
+        Bukkit.broadcastMessage(ChatColor.GOLD + player.getName() + ChatColor.GRAY + " has recieved the soul of " + ChatColor.WHITE + type.getDisplayName() + ChatColor.GRAY + ".");
+    }
+
+    public void announceSoulPurified(Player player, SoulType type) {
+        if (player == null || type == null) return;
+        Bukkit.broadcastMessage(ChatColor.AQUA + player.getName() + ChatColor.GRAY + " has restored the Soul of " + ChatColor.WHITE + type.getDisplayName() + ChatColor.GRAY + " at the altar.");
     }
 
     private ItemStack modifyKarmaValue(ItemStack item, int delta) {
@@ -133,10 +173,6 @@ public class SoulManager {
         return refreshVisuals(item);
     }
 
-    /* ==========================================
-       3. VISUAL METADATA REFRESH ENGINE
-       ========================================== */
-
     public ItemStack refreshVisuals(ItemStack item) {
         SoulType type = soulItem.getSoulType(item);
         if (type == null) return item;
@@ -145,36 +181,41 @@ public class SoulManager {
 
         PersistentDataContainer pdc = meta.getPersistentDataContainer();
         int karma = pdc.getOrDefault(karmaKey, PersistentDataType.INTEGER, 0);
-        
+
         String holderStr = pdc.get(holderKey, PersistentDataType.STRING);
         String holderName = "None";
         if (holderStr != null) {
-            var player = Bukkit.getOfflinePlayer(UUID.fromString(holderStr));
-            holderName = player.getName() != null ? player.getName() : "Unknown";
+            try {
+                UUID holderUUID = UUID.fromString(holderStr);
+                var player = Bukkit.getOfflinePlayer(holderUUID);
+                holderName = player.getName() != null ? player.getName() : "Unknown";
+            } catch (IllegalArgumentException exception) {
+                holderName = "Unknown";
+            }
         }
 
         List<String> lore = new ArrayList<>();
-        
+
         if (isShattered(item)) {
-            meta.setDisplayName(ChatColor.DARK_RED + "§l✕ Shattered Soul of " + type.getDisplayName() + " ✕");
-            lore.add("§4§m---------------------------------------");
-            lore.add("§cThis soul has been fractured by irredeemable acts.");
-            lore.add("§7All passive traits and dynamic effects are completely §cdormant§7.");
+            meta.setDisplayName(ChatColor.DARK_RED + "Shattered Soul of " + type.getDisplayName());
+            lore.add(ChatColor.DARK_RED + "---------------------------------------");
+            lore.add(ChatColor.RED + "This soul has been fractured by irredeemable acts.");
+            lore.add(ChatColor.GRAY + "All passive traits and dynamic effects are dormant.");
             lore.add("");
-            lore.add("§6Requires a collective Restoration Ritual at the Soul Altar.");
-            lore.add("§4§m---------------------------------------");
+            lore.add(ChatColor.GOLD + "Requires a collective restoration ritual at the Soul Altar.");
+            lore.add(ChatColor.DARK_RED + "---------------------------------------");
         } else if (karma < CORRUPTION_THRESHOLD) {
-            meta.setDisplayName(ChatColor.DARK_GRAY + "§k!§r " + ChatColor.RED + "Corrupted Soul of " + type.getDisplayName() + ChatColor.DARK_GRAY + " §k!");
+            meta.setDisplayName(ChatColor.DARK_GRAY + "Corrupted Soul of " + type.getDisplayName());
             lore.add("");
-            lore.add("§7Karma State: " + ChatColor.DARK_RED + karma + " §4[CORRUPTED]");
-            lore.add("§7Current Holder: §f" + holderName);
+            lore.add(ChatColor.GRAY + "Karma State: " + ChatColor.DARK_RED + karma + ChatColor.DARK_RED + " [CORRUPTED]");
+            lore.add(ChatColor.GRAY + "Current Holder: " + ChatColor.WHITE + holderName);
             lore.add("");
-            lore.add(ChatColor.RED + "§oThe air grows cold. Its original light has completely inverted...");
+            lore.add(ChatColor.RED + "The air grows cold. Its original light has inverted.");
         } else {
             meta.setDisplayName(type.getColor() + "Soul of " + type.getDisplayName());
             lore.add("");
-            lore.add("§7Karma State: " + ChatColor.GREEN + "+" + karma + " §a[HEALTHY]");
-            lore.add("§7Current Holder: §f" + holderName);
+            lore.add(ChatColor.GRAY + "Karma State: " + ChatColor.GREEN + "+" + karma + ChatColor.GREEN + " [HEALTHY]");
+            lore.add(ChatColor.GRAY + "Current Holder: " + ChatColor.WHITE + holderName);
         }
 
         meta.setLore(lore);
