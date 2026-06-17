@@ -10,7 +10,7 @@ import java.util.UUID;
 
 public class JusticeTracker {
 
-    public static final int MOST_WANTED_THRESHOLD = 10;
+    public static final int MOST_WANTED_THRESHOLD = 5;
     public static final long REPEATED_KILL_WINDOW_MILLIS = 60L * 60L * 1000L;
 
     private final Map<UUID, Integer> killStreaks = new HashMap<>();

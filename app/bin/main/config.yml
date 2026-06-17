@@ -1,0 +1,44 @@
+altar:
+  search-radius: 12
+  center:
+    enabled: true
+    world: world
+    x: -165
+    y: 131
+    z: -127
+  anchors:
+    bravery:
+      world: world
+      x: -160.49
+      y: 129.0
+      z: -122.47
+    determination:
+      world: world
+      x: -165.72
+      y: 129.0
+      z: -120.40
+    justice:
+      world: world
+      x: -170.61
+      y: 129.0
+      z: -122.52
+    perseverance:
+      world: world
+      x: -172.43
+      y: 129.0
+      z: -127.51
+    patience:
+      world: world
+      x: -170.45
+      y: 129.0
+      z: -132.36
+    integrity:
+      world: world
+      x: -165.42
+      y: 129.0
+      z: -134.51
+    kindness:
+      world: world
+      x: -160.47
+      y: 129.0
+      z: -132.51

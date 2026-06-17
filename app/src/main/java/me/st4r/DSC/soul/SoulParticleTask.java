@@ -33,18 +33,20 @@ public class SoulParticleTask extends BukkitRunnable {
             ItemStack soulItem = findSoulInInventory(player, type);
             if (soulItem == null) continue;
 
-            Location loc = player.getLocation().add(0, 1, 0); 
+            Location loc = player.getLocation().add(0, 1.0, 0);
 
             if (soulManager.isShattered(soulItem)) {
-                player.getWorld().spawnParticle(Particle.ASH, loc, 3, 0.3, 0.4, 0.3, 0.02);
+                player.getWorld().spawnParticle(Particle.ASH, loc, 5, 0.35, 0.45, 0.35, 0.02);
+                player.getWorld().spawnParticle(Particle.SMOKE, loc.clone().add(0, 0.25, 0), 2, 0.2, 0.2, 0.2, 0.005);
             } else if (soulManager.isCorrupted(soulItem)) {
-                player.getWorld().spawnParticle(Particle.SMOKE, loc, 2, 0.2, 0.4, 0.2, 0.01);
-                player.getWorld().spawnParticle(Particle.WITCH, loc, 1, 0.2, 0.4, 0.2, 0.0);
+                player.getWorld().spawnParticle(Particle.SMOKE, loc, 4, 0.25, 0.45, 0.25, 0.01);
+                player.getWorld().spawnParticle(Particle.WITCH, loc, 2, 0.2, 0.35, 0.2, 0.0);
             } else {
 
                 Color color = getBukkitColor(type);
-                Particle.DustOptions dustOptions = new Particle.DustOptions(color, 1.1F);
-                player.getWorld().spawnParticle(Particle.DUST, loc, 3, 0.2, 0.4, 0.2, dustOptions);
+                Particle.DustOptions dustOptions = new Particle.DustOptions(color, 1.2F);
+                player.getWorld().spawnParticle(Particle.DUST, loc, 6, 0.3, 0.45, 0.3, dustOptions);
+                player.getWorld().spawnParticle(Particle.DUST, loc.clone().add(0, 0.35, 0), 3, 0.15, 0.2, 0.15, new Particle.DustOptions(color, 0.9F));
             }
         }
     }
