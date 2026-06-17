@@ -5,6 +5,7 @@ import me.st4r.DSC.pledge.Pledge.Status;
 import me.st4r.DSC.tracker.IntegrityTracker;
 import me.st4r.DSC.soul.SoulType;
 import org.bukkit.Bukkit;
+import org.bukkit.ChatColor;
 import org.bukkit.OfflinePlayer;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.YamlConfiguration;
@@ -154,9 +155,19 @@ public class PledgeManager {
         if (pledge.isComplete()) {
             pledge.setStatus(Status.HONORED);
             if (!pledge.isIntegrityDisqualified()) {
-                plugin.getIntegrityTracker().recordHonoredPledge(pledge.getCreatorUUID(), pledge.getTargetUUID(), false);
+                int honoredCount = plugin.getIntegrityTracker().recordHonoredPledge(pledge.getCreatorUUID(), pledge.getTargetUUID(), false);
+
+                Player creator = Bukkit.getPlayer(pledge.getCreatorUUID());
+                if (creator != null) {
+                    plugin.sendSoulProgress(creator, SoulType.INTEGRITY, honoredCount, IntegrityTracker.HONORED_PLEDGE_THRESHOLD);
+                }
+
+                Player target = Bukkit.getPlayer(pledge.getTargetUUID());
+                if (target != null && (creator == null || !target.getUniqueId().equals(creator.getUniqueId()))) {
+                    plugin.sendSoulProgress(target, SoulType.INTEGRITY, honoredCount, IntegrityTracker.HONORED_PLEDGE_THRESHOLD);
+                }
+
                 if (plugin.getIntegrityTracker().isEligibleForIntegrity(pledge.getCreatorUUID())) {
-                    Player creator = Bukkit.getPlayer(pledge.getCreatorUUID());
                     if (creator != null) {
                         plugin.grantSoul(creator, SoulType.INTEGRITY);
                     }

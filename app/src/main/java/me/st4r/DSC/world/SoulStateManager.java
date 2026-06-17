@@ -5,6 +5,8 @@ import me.st4r.DSC.soul.SoulItem;
 import me.st4r.DSC.soul.SoulManager;
 import me.st4r.DSC.soul.SoulType;
 import org.bukkit.Bukkit;
+import org.bukkit.Location;
+import org.bukkit.block.Chest;
 import org.bukkit.entity.Item;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
@@ -155,6 +157,13 @@ public class SoulStateManager {
     }
 
     private ItemStack findTrackedSoul(SoulType type) {
+        if (type == SoulType.PATIENCE) {
+            ItemStack patienceChestSoul = findPatienceChestSoul();
+            if (patienceChestSoul != null) {
+                return patienceChestSoul;
+            }
+        }
+
         UUID holderUUID = soulManager.getHolder(type);
         if (holderUUID != null) {
             Player holder = Bukkit.getPlayer(holderUUID);
@@ -173,6 +182,26 @@ public class SoulStateManager {
                 if (stack != null && soulItem.isSoul(stack) && soulItem.getSoulType(stack) == type) {
                     return stack;
                 }
+            }
+        }
+
+        return null;
+    }
+
+    private ItemStack findPatienceChestSoul() {
+        Location chestLocation = plugin.resolvePatienceChestLocation();
+        if (chestLocation == null || chestLocation.getWorld() == null) {
+            return null;
+        }
+
+        var block = chestLocation.getWorld().getBlockAt(chestLocation);
+        if (!(block.getState() instanceof Chest chest)) {
+            return null;
+        }
+
+        for (ItemStack item : chest.getBlockInventory().getContents()) {
+            if (item != null && soulItem.isSoul(item) && soulItem.getSoulType(item) == SoulType.PATIENCE) {
+                return item;
             }
         }
 

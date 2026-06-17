@@ -56,6 +56,7 @@ public class SoulProgressListener implements Listener {
     private final Map<UUID, Long> onlineSince = new HashMap<>();
     private final Map<UUID, Long> lastAggressionAt = new HashMap<>();
     private final Map<UUID, Long> lastDeathAt = new HashMap<>();
+    private final Map<UUID, Integer> lastPatientProgressMinute = new HashMap<>();
 
     public SoulProgressListener(DSC plugin) {
         this.plugin = plugin;
@@ -74,6 +75,7 @@ public class SoulProgressListener implements Listener {
             UUID playerUUID = player.getUniqueId();
             onlineSince.put(playerUUID, now);
             lastAggressionAt.put(playerUUID, now);
+            lastPatientProgressMinute.put(playerUUID, 0);
         }
 
         new BukkitRunnable() {
@@ -92,6 +94,7 @@ public class SoulProgressListener implements Listener {
             UUID playerUUID = player.getUniqueId();
             onlineSince.put(playerUUID, now);
             lastAggressionAt.put(playerUUID, now);
+            lastPatientProgressMinute.put(playerUUID, 0);
         }
     }
 
@@ -101,6 +104,7 @@ public class SoulProgressListener implements Listener {
         UUID playerUUID = event.getPlayer().getUniqueId();
         onlineSince.put(playerUUID, now);
         lastAggressionAt.put(playerUUID, now);
+        lastPatientProgressMinute.put(playerUUID, 0);
         perseveranceTracker.recordLogin(playerUUID, now);
     }
 
@@ -111,6 +115,7 @@ public class SoulProgressListener implements Listener {
         perseveranceTracker.recordLogout(playerUUID, now);
         onlineSince.remove(playerUUID);
         lastAggressionAt.remove(playerUUID);
+        lastPatientProgressMinute.remove(playerUUID);
     }
 
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
@@ -132,11 +137,10 @@ public class SoulProgressListener implements Listener {
         lastDeathAt.put(victimUUID, now);
 
         boolean inCombatRecently = braveryTracker.wasInCombatRecently(victimUUID, now, BRAVERY_COMBAT_WINDOW_MILLIS);
-        if (inCombatRecently) {
-            braveryTracker.recordDeath(victimUUID);
-        } else {
-            braveryTracker.recordCowardlyAct(victimUUID);
-        }
+        int braveryProgress = inCombatRecently
+                ? braveryTracker.recordDeath(victimUUID)
+                : braveryTracker.recordCowardlyAct(victimUUID);
+        plugin.sendSoulProgress(victim, SoulType.BRAVERY, braveryProgress, BraveryTracker.DEATHS_REQUIRED);
 
         if (braveryTracker.isRewardReady(victimUUID) && plugin.grantSoul(victim, SoulType.BRAVERY)) {
             braveryTracker.markRewardGranted(victimUUID);
@@ -144,7 +148,8 @@ public class SoulProgressListener implements Listener {
             shatterHeldSoul(victim, SoulType.BRAVERY);
         }
 
-        determinationTracker.recordDeath(victimUUID);
+        int serverDeaths = determinationTracker.recordDeath(victimUUID);
+        plugin.sendSoulProgress(victim, SoulType.DETERMINATION, serverDeaths, DeterminationTracker.SERVER_DEATH_THRESHOLD);
         if (determinationTracker.isRewardReady()) {
             UUID leaderUUID = determinationTracker.getCurrentLeader();
             Player leader = leaderUUID == null ? null : Bukkit.getPlayer(leaderUUID);
@@ -166,7 +171,10 @@ public class SoulProgressListener implements Listener {
                 shatterHeldSoul(killer, SoulType.JUSTICE);
             }
 
-            perseveranceTracker.recordSameSourceDeath(victimUUID, killerUUID, now);
+            int perseveranceProgress = perseveranceTracker.recordSameSourceDeath(victimUUID, killerUUID, now);
+            plugin.sendSoulProgress(victim, SoulType.PERSEVERANCE, perseveranceProgress, PerseveranceTracker.FILL_TRIGGER_STREAK);
+            int justiceProgress = justiceTracker.getKillStreak(killerUUID);
+            plugin.sendSoulProgress(killer, SoulType.JUSTICE, justiceProgress, JusticeTracker.MOST_WANTED_THRESHOLD);
         }
 
         justiceTracker.recordDeath(victimUUID);
@@ -269,9 +277,19 @@ public class SoulProgressListener implements Listener {
         for (Player player : Bukkit.getOnlinePlayers()) {
             UUID playerUUID = player.getUniqueId();
 
+            int patientProgressMinutes = getPatientProgressMinutes(playerUUID, now);
+            int lastReportedMinutes = lastPatientProgressMinute.getOrDefault(playerUUID, 0);
+            if (patientProgressMinutes > lastReportedMinutes) {
+                lastPatientProgressMinute.put(playerUUID, patientProgressMinutes);
+                if (!soulStateManager.isSoulPresent(SoulType.PATIENCE)) {
+                    plugin.sendSoulProgress(player, SoulType.PATIENCE, patientProgressMinutes, 15);
+                }
+            }
+
             if (!soulStateManager.isSoulPresent(SoulType.PATIENCE) && isPatient(playerUUID, now)) {
                 if (plugin.grantSoul(player, SoulType.PATIENCE)) {
                     patientize(playerUUID);
+                    lastPatientProgressMinute.put(playerUUID, 0);
                 }
             }
 
@@ -292,18 +310,27 @@ public class SoulProgressListener implements Listener {
     }
 
     private boolean isPatient(UUID playerUUID, long now) {
+        return getPatientProgressMillis(playerUUID, now) >= PATIENCE_WINDOW_MILLIS;
+    }
+
+    private long getPatientProgressMillis(UUID playerUUID, long now) {
         Long joinedAt = onlineSince.get(playerUUID);
-        if (joinedAt == null) return false;
+        if (joinedAt == null) return 0L;
 
         Long aggressionAt = lastAggressionAt.get(playerUUID);
         long referenceTime = aggressionAt == null ? joinedAt : Math.max(joinedAt, aggressionAt);
-        return now - referenceTime >= PATIENCE_WINDOW_MILLIS;
+        return Math.max(0L, now - referenceTime);
+    }
+
+    private int getPatientProgressMinutes(UUID playerUUID, long now) {
+        return (int) Math.min(15L, getPatientProgressMillis(playerUUID, now) / 60_000L);
     }
 
     private void patientize(UUID playerUUID) {
         long now = System.currentTimeMillis();
         onlineSince.put(playerUUID, now);
         lastAggressionAt.put(playerUUID, now);
+        lastPatientProgressMinute.put(playerUUID, 0);
     }
 
     private Player resolvePlayerDamager(Entity damager) {
