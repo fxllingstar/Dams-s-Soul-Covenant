@@ -21,6 +21,7 @@ public class PerseveranceTracker {
     private final Map<UUID, Integer> dungeonCompletionCounts = new HashMap<>();
     private final Map<UUID, UUID> latestCompletionWinner = new HashMap<>();
     private final Map<UUID, Map<UUID, SourceDeathWindow>> sourceDeathWindows = new HashMap<>();
+    private final Map<UUID, Integer> abandonedRunCounts = new HashMap<>();
     private final Map<UUID, Long> lastLoginAt = new HashMap<>();
     private final Map<UUID, Long> lastLogoutAt = new HashMap<>();
     private final Set<UUID> fillReadyPlayers = new HashSet<>();
@@ -66,6 +67,13 @@ public class PerseveranceTracker {
 
     public int recordSameSourceDeath(UUID playerUUID, UUID sourceUUID) {
         return recordSameSourceDeath(playerUUID, sourceUUID, System.currentTimeMillis());
+    }
+
+    public int recordAbandonedRun(UUID playerUUID) {
+        if (playerUUID == null) return 0;
+        int updatedCount = abandonedRunCounts.getOrDefault(playerUUID, 0) + 1;
+        abandonedRunCounts.put(playerUUID, updatedCount);
+        return updatedCount;
     }
 
     public void recordLogin(UUID playerUUID, long timestampMillis) {
@@ -129,6 +137,7 @@ public class PerseveranceTracker {
         dungeonCompletionCounts.remove(playerUUID);
         latestCompletionWinner.remove(playerUUID);
         sourceDeathWindows.remove(playerUUID);
+        abandonedRunCounts.remove(playerUUID);
         lastLoginAt.remove(playerUUID);
         lastLogoutAt.remove(playerUUID);
         fillReadyPlayers.remove(playerUUID);
@@ -142,6 +151,7 @@ public class PerseveranceTracker {
         dungeonCompletionCounts.clear();
         latestCompletionWinner.clear();
         sourceDeathWindows.clear();
+        abandonedRunCounts.clear();
         lastLoginAt.clear();
         lastLogoutAt.clear();
         fillReadyPlayers.clear();

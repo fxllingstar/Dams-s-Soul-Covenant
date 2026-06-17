@@ -2,11 +2,14 @@ package me.st4r.DSC.pledge;
 
 import me.st4r.DSC.DSC;
 import me.st4r.DSC.pledge.Pledge.Status;
+import me.st4r.DSC.tracker.IntegrityTracker;
+import me.st4r.DSC.soul.SoulType;
 import org.bukkit.Bukkit;
 import org.bukkit.OfflinePlayer;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Player;
+import org.bukkit.inventory.ItemStack;
 
 import java.io.File;
 import java.io.IOException;
@@ -152,6 +155,12 @@ public class PledgeManager {
             pledge.setStatus(Status.HONORED);
             if (!pledge.isIntegrityDisqualified()) {
                 plugin.getIntegrityTracker().recordHonoredPledge(pledge.getCreatorUUID(), pledge.getTargetUUID(), false);
+                if (plugin.getIntegrityTracker().isEligibleForIntegrity(pledge.getCreatorUUID())) {
+                    Player creator = Bukkit.getPlayer(pledge.getCreatorUUID());
+                    if (creator != null) {
+                        plugin.grantSoul(creator, SoulType.INTEGRITY);
+                    }
+                }
             }
         }
 
@@ -164,7 +173,16 @@ public class PledgeManager {
         if (!pledge.involves(player.getUniqueId())) return false;
 
         pledge.setStatus(Status.BROKEN);
-        plugin.getIntegrityTracker().recordBrokenPledge(pledge.getCreatorUUID());
+        int brokenCount = plugin.getIntegrityTracker().recordBrokenPledge(pledge.getCreatorUUID());
+        if (plugin.getIntegrityTracker().isShattered(pledge.getCreatorUUID()) && brokenCount >= IntegrityTracker.BROKEN_PLEDGE_THRESHOLD) {
+            Player creator = Bukkit.getPlayer(pledge.getCreatorUUID());
+            if (creator != null) {
+                ItemStack integritySoul = findSoulInInventory(creator, SoulType.INTEGRITY);
+                if (integritySoul != null) {
+                    plugin.getSoulManager().shatter(integritySoul);
+                }
+            }
+        }
         save();
         return true;
     }
@@ -185,6 +203,23 @@ public class PledgeManager {
             parts.add("Integrity-disqualified");
         }
         return String.join(" | ", parts);
+    }
+
+    public void clear() {
+        pledges.clear();
+        nextId = 1;
+        save();
+    }
+
+    private ItemStack findSoulInInventory(Player player, SoulType type) {
+        if (player == null || type == null) return null;
+
+        for (ItemStack item : player.getInventory().getContents()) {
+            if (item != null && plugin.getSoulItem().isSoul(item) && plugin.getSoulItem().getSoulType(item) == type) {
+                return item;
+            }
+        }
+        return null;
     }
 
     public record FulfillmentResult(boolean allowed, boolean disqualifiedNow, boolean completed, boolean disqualified) {
