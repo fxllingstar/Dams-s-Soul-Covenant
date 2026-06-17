@@ -6,6 +6,7 @@ import me.st4r.DSC.soul.SoulManager;
 import me.st4r.DSC.soul.SoulType;
 import me.st4r.DSC.world.SoulStateManager;
 import org.bukkit.Bukkit;
+import org.bukkit.ChatColor;
 import org.bukkit.Location;
 import org.bukkit.NamespacedKey;
 import org.bukkit.Particle;
@@ -35,7 +36,6 @@ import java.util.Map;
 import java.util.UUID;
 
 @SuppressWarnings("deprecation")
-
 public class KindnessTracker implements Listener {
 
     private static final int OFFENSIVE_USE_THRESHOLD = 10;
@@ -44,16 +44,13 @@ public class KindnessTracker implements Listener {
     private final SoulItem soulItem;
     private final SoulManager soulManager;
     private final SoulStateManager soulStateManager;
-    
+
     private final NamespacedKey offensiveUsesKey;
     private final NamespacedKey healthModifierKey;
 
-  
     private int totalServerSaves = 0;
     private boolean soulSpawned = false;
     private final Map<UUID, Integer> playerContributions = new HashMap<>();
-    
-
     private final Map<String, Integer> dailyPairsSaveRegistry = new HashMap<>();
 
     public KindnessTracker(DSC plugin) {
@@ -63,7 +60,7 @@ public class KindnessTracker implements Listener {
         this.soulStateManager = plugin.getSoulStateManager();
         this.offensiveUsesKey = new NamespacedKey(plugin, "kindness_offensive_uses");
         this.healthModifierKey = new NamespacedKey(plugin, "kindness_max_health");
-        
+
         startPassiveHeartEngine();
     }
 
@@ -76,7 +73,6 @@ public class KindnessTracker implements Listener {
         ThrownPotion potion = event.getPotion();
         if (!(potion.getShooter() instanceof Player rescuer)) return;
 
-   
         boolean isHealingPotion = potion.getEffects().stream().anyMatch(effect ->
                 effect.getType().equals(PotionEffectType.REGENERATION)
                         || effect.getType().equals(PotionEffectType.INSTANT_HEALTH));
@@ -85,8 +81,7 @@ public class KindnessTracker implements Listener {
         for (Entity entity : event.getAffectedEntities()) {
             if (!(entity instanceof Player target) || target.equals(rescuer)) continue;
 
-      
-            if (target.getHealth() <= 4.0) {
+            if (target.getHealth() <= 8.0) {
                 String dailyKey = LocalDate.now() + "_" + rescuer.getUniqueId() + "_" + target.getUniqueId();
                 int currentDailySaves = dailyPairsSaveRegistry.getOrDefault(dailyKey, 0);
 
@@ -95,12 +90,12 @@ public class KindnessTracker implements Listener {
                     playerContributions.put(rescuer.getUniqueId(), playerContributions.getOrDefault(rescuer.getUniqueId(), 0) + 1);
                     totalServerSaves++;
 
-                    rescuer.sendMessage("§a§l✔ §aGenuine save logged! Collective Server Progress: §e" + totalServerSaves + "/30");
+                    plugin.sendSoulProgress(rescuer, SoulType.KINDNESS, totalServerSaves, 30);
 
                     if (totalServerSaves >= 30 && !soulSpawned) {
                         manifestKindnessSoul();
                     }
-                    break; 
+                    break;
                 }
             }
         }
@@ -120,7 +115,6 @@ public class KindnessTracker implements Listener {
         if (topContributor == null) return;
         soulSpawned = true;
 
-        ItemStack kindnessSoul = soulItem.create(SoulType.KINDNESS);
         Player winner = Bukkit.getPlayer(topContributor);
 
         Bukkit.broadcastMessage("§a§l§m---------------------------------------");
@@ -128,6 +122,7 @@ public class KindnessTracker implements Listener {
         Bukkit.broadcastMessage("§a§l§m---------------------------------------");
 
         if (winner != null && winner.isOnline()) {
+            ItemStack kindnessSoul = soulItem.create(SoulType.KINDNESS, winner.getUniqueId());
             Map<Integer, ItemStack> overflow = winner.getInventory().addItem(kindnessSoul);
             if (overflow.isEmpty()) {
                 soulManager.setHolder(SoulType.KINDNESS, winner.getUniqueId());
@@ -138,6 +133,7 @@ public class KindnessTracker implements Listener {
             }
             winner.sendMessage("§a§k!§r §aYour profound aura of protection has materialized the Soul of Kindness directly to you. §a§k!");
         } else {
+            ItemStack kindnessSoul = soulItem.create(SoulType.KINDNESS);
             Location spawn = Bukkit.getWorlds().get(0).getSpawnLocation();
             Bukkit.getWorlds().get(0).dropItemNaturally(spawn, kindnessSoul);
         }
@@ -166,13 +162,11 @@ public class KindnessTracker implements Listener {
                     boolean hasModifierActive = maxHealthAttribute.getModifiers().stream()
                             .anyMatch(mod -> mod.getKey().equals(healthModifierKey));
 
-                  
                     if (player.equals(systemHolder) && holdsSoulAsset(player) && !isSoulAssetShattered(player)) {
                         if (!hasModifierActive) {
                             maxHealthAttribute.addModifier(healthModifier);
                         }
-                        
-                 
+
                         for (Entity localizedEntity : player.getNearbyEntities(3.0, 3.0, 3.0)) {
                             if (localizedEntity instanceof Player nearbyPlayer) {
                                 nearbyPlayer.addPotionEffect(new PotionEffect(
@@ -183,7 +177,6 @@ public class KindnessTracker implements Listener {
                         continue;
                     }
 
-               
                     if (hasModifierActive) {
                         maxHealthAttribute.removeModifier(healthModifier);
                     }
@@ -221,13 +214,12 @@ public class KindnessTracker implements Listener {
         ItemStack heldItem = holder.getInventory().getItemInMainHand();
 
         if (!soulItem.isSoul(heldItem) || soulItem.getSoulType(heldItem) != SoulType.KINDNESS) return;
-        
+
         if (soulManager.isShattered(heldItem)) {
             holder.sendMessage("§cThe Soul of Kindness is currently shattered. Its active properties are dormant.");
             return;
         }
 
-       
         if (holder.getHealth() <= 2.0 || holder.getFoodLevel() < 10) {
             holder.sendMessage("§cYou are too weak to sacrifice your life force right now.");
             return;
@@ -241,10 +233,7 @@ public class KindnessTracker implements Listener {
 
         holder.setHealth(holder.getHealth() - 2.0);
         holder.setFoodLevel(holder.getFoodLevel() - 10);
-
-       
         target.setHealth(Math.min(target.getHealth() + 6.0, maxTargetHealth));
-
 
         soulManager.addKarma(heldItem, 5);
 
@@ -263,15 +252,13 @@ public class KindnessTracker implements Listener {
 
         ItemStack weapon = attacker.getInventory().getItemInMainHand();
         if (!soulItem.isSoul(weapon) || soulItem.getSoulType(weapon) != SoulType.KINDNESS) return;
-        
+
         if (soulManager.isShattered(weapon)) return;
 
-       
         event.setDamage(14.0);
 
         soulManager.removeKarma(weapon, 8);
 
-       
         ItemMeta meta = weapon.getItemMeta();
         if (meta != null) {
             var pdc = meta.getPersistentDataContainer();

@@ -42,10 +42,3 @@ altar:
       x: -160.47
       y: 129.0
       z: -132.51
-patience:
-  chest:
-    enabled: false
-    world: world
-    x: 0
-    y: 0
-    z: 0

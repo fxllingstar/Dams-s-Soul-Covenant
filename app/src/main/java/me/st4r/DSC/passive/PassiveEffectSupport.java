@@ -45,14 +45,25 @@ public final class PassiveEffectSupport {
 
     public void spawnDust(Player player, Color color, int count, double x, double y, double z, float size) {
         if (player == null || color == null) return;
-        player.getWorld().spawnParticle(
+        var world = player.getWorld();
+        var base = player.getLocation().add(0, 1.0, 0);
+        world.spawnParticle(
             Particle.DUST,
-            player.getLocation().add(0, 1.0, 0),
+            base,
             count,
             x,
             y,
             z,
             new Particle.DustOptions(color, size)
+        );
+        world.spawnParticle(
+            Particle.DUST,
+            base.add(0, 0.45, 0),
+            Math.max(1, count / 2),
+            x * 0.7,
+            y * 0.55,
+            z * 0.7,
+            new Particle.DustOptions(color, Math.max(0.85F, size * 0.85F))
         );
     }
 }

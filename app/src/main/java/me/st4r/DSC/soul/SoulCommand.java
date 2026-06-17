@@ -87,7 +87,7 @@ public class SoulCommand implements CommandExecutor, TabCompleter {
             return true;
         }
 
-        ItemStack soul = soulItem.create(type);
+        ItemStack soul = soulItem.create(type, target.getUniqueId());
         Map<Integer, ItemStack> overflow = target.getInventory().addItem(soul);
         if (overflow.isEmpty()) {
             soulManager.setHolder(type, target.getUniqueId());
@@ -124,7 +124,7 @@ public class SoulCommand implements CommandExecutor, TabCompleter {
                 continue;
             }
 
-            ItemStack soul = soulItem.create(type);
+            ItemStack soul = soulItem.create(type, target.getUniqueId());
             Map<Integer, ItemStack> overflow = target.getInventory().addItem(soul);
             if (overflow.isEmpty()) {
                 soulManager.setHolder(type, target.getUniqueId());
@@ -156,7 +156,7 @@ public class SoulCommand implements CommandExecutor, TabCompleter {
             return true;
         }
 
-        ItemStack soul = soulItem.create(type);
+        ItemStack soul = soulItem.create(type, sender instanceof Player player ? player.getUniqueId() : null);
         soulManager.setHolder(type, null);
 
         if (sender instanceof Player player) {

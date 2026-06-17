@@ -27,9 +27,15 @@ import me.st4r.DSC.world.SoulStateManager;
 import me.st4r.DSC.world.SoulStateManager.SoulStateSnapshot;
 
 import org.bukkit.Bukkit;
+import org.bukkit.ChatColor;
+import org.bukkit.Location;
+import org.bukkit.Material;
 import org.bukkit.command.PluginCommand;
+import org.bukkit.configuration.ConfigurationSection;
+import org.bukkit.block.Block;
 import org.bukkit.entity.Item;
 import org.bukkit.entity.Player;
+import org.bukkit.block.Chest;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.java.JavaPlugin;
 
@@ -111,12 +117,34 @@ public final class DSC extends JavaPlugin {
     public SoulProgressListener getSoulProgressListener() { return soulProgressListener; }
     public KindnessTracker getKindnessTracker() { return kindnessTracker; }
 
+    public void sendSoulProgress(Player player, SoulType type, int current, int total) {
+        if (player == null || type == null) {
+            return;
+        }
+
+        int clampedCurrent = Math.max(0, Math.min(current, total));
+        player.sendMessage(type.getColor() + "(" + clampedCurrent + "/" + total + ")");
+    }
+
+    public void sendProgress(Player player, String label, ChatColor color, int current, int total) {
+        if (player == null || label == null || color == null) {
+            return;
+        }
+
+        int clampedCurrent = Math.max(0, Math.min(current, total));
+        player.sendMessage(color + "(" + clampedCurrent + "/" + total + ")");
+    }
+
     public boolean grantSoul(Player target, SoulType type) {
         if (target == null || type == null || soulStateManager.isSoulPresent(type)) {
             return false;
         }
 
-        ItemStack soul = soulItem.create(type);
+        if (type == SoulType.PATIENCE) {
+            return grantPatienceSoul(target);
+        }
+
+        ItemStack soul = soulItem.create(type, target.getUniqueId());
         Map<Integer, ItemStack> overflow = target.getInventory().addItem(soul);
         if (overflow.isEmpty()) {
             soulManager.setHolder(type, target.getUniqueId());
@@ -126,6 +154,58 @@ public final class DSC extends JavaPlugin {
         }
 
         return true;
+    }
+
+    private boolean grantPatienceSoul(Player target) {
+        ItemStack soul = soulItem.create(SoulType.PATIENCE, target.getUniqueId());
+        Location chestLocation = resolvePatienceChestLocation();
+
+        if (chestLocation != null && chestLocation.getWorld() != null) {
+            var world = chestLocation.getWorld();
+            var block = world.getBlockAt(chestLocation);
+            if (block.getType() != Material.CHEST) {
+                block.setType(Material.CHEST);
+            }
+
+            if (block.getState() instanceof Chest chest) {
+                Map<Integer, ItemStack> overflow = chest.getBlockInventory().addItem(soul);
+                chest.update(true, false);
+                if (!overflow.isEmpty()) {
+                    world.dropItemNaturally(chestLocation.clone().add(0.5D, 1.0D, 0.5D), soul);
+                }
+            } else {
+                world.dropItemNaturally(chestLocation, soul);
+            }
+
+            soulManager.setHolder(SoulType.PATIENCE, target.getUniqueId());
+            sendSoulProgress(target, SoulType.PATIENCE, 15, 15);
+            return true;
+        }
+
+        Map<Integer, ItemStack> overflow = target.getInventory().addItem(soul);
+        if (overflow.isEmpty()) {
+            soulManager.setHolder(SoulType.PATIENCE, target.getUniqueId());
+            soulManager.announceSoulAcquired(target, SoulType.PATIENCE);
+        } else {
+            target.getWorld().dropItemNaturally(target.getLocation(), soul);
+        }
+
+        return true;
+    }
+
+    public Location resolvePatienceChestLocation() {
+        ConfigurationSection section = getConfig().getConfigurationSection("patience.chest");
+        if (section == null || !section.getBoolean("enabled", false)) {
+            return null;
+        }
+
+        String worldName = section.getString("world");
+        var world = worldName == null ? null : Bukkit.getWorld(worldName);
+        if (world == null) {
+            return null;
+        }
+
+        return new Location(world, section.getDouble("x"), section.getDouble("y"), section.getDouble("z"));
     }
 
     public void resetCycle(String broadcastMessage) {
@@ -152,6 +232,8 @@ public final class DSC extends JavaPlugin {
             }
         }
 
+        clearPatienceChest();
+
         soulManager.clearAll();
         braveryTracker.clear();
         determinationTracker.clear();
@@ -174,6 +256,27 @@ public final class DSC extends JavaPlugin {
         if (soulProgressListener != null) {
             soulProgressListener.resetRuntimeState();
         }
+    }
+
+    private void clearPatienceChest() {
+        Location chestLocation = resolvePatienceChestLocation();
+        if (chestLocation == null || chestLocation.getWorld() == null) {
+            return;
+        }
+
+        Block block = chestLocation.getWorld().getBlockAt(chestLocation);
+        if (!(block.getState() instanceof Chest chest)) {
+            return;
+        }
+
+        ItemStack[] contents = chest.getBlockInventory().getContents();
+        for (int slot = 0; slot < contents.length; slot++) {
+            ItemStack item = contents[slot];
+            if (item != null && soulItem.isSoul(item)) {
+                chest.getBlockInventory().setItem(slot, null);
+            }
+        }
+        chest.update(true, false);
     }
 
     private void registerPledgeCommand() {
