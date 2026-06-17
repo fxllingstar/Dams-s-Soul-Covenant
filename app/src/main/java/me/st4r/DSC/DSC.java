@@ -116,7 +116,7 @@ public final class DSC extends JavaPlugin {
             return false;
         }
 
-        ItemStack soul = soulItem.create(type);
+        ItemStack soul = soulItem.create(type, target.getUniqueId());
         Map<Integer, ItemStack> overflow = target.getInventory().addItem(soul);
         if (overflow.isEmpty()) {
             soulManager.setHolder(type, target.getUniqueId());

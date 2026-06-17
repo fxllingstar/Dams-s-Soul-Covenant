@@ -52,12 +52,16 @@ public class SoulManager {
         if (!soulItem.isSoul(item) || !item.hasItemMeta()) return null;
 
         String holderStr = item.getItemMeta().getPersistentDataContainer().get(holderKey, PersistentDataType.STRING);
-        if (holderStr == null) return null;
+        if (holderStr == null) {
+            SoulType type = soulItem.getSoulType(item);
+            return type == null ? null : activeHolders.get(type);
+        }
 
         try {
             return UUID.fromString(holderStr);
         } catch (IllegalArgumentException exception) {
-            return null;
+            SoulType type = soulItem.getSoulType(item);
+            return type == null ? null : activeHolders.get(type);
         }
     }
 
@@ -140,11 +144,14 @@ public class SoulManager {
     public void resynchronizeOnlineHolders() {
         activeHolders.clear();
         for (Player player : Bukkit.getOnlinePlayers()) {
-            for (ItemStack item : player.getInventory().getContents()) {
+            ItemStack[] contents = player.getInventory().getContents();
+            for (int slot = 0; slot < contents.length; slot++) {
+                ItemStack item = contents[slot];
                 if (item == null || !soulItem.isSoul(item)) continue;
                 SoulType type = soulItem.getSoulType(item);
                 if (type != null) {
                     activeHolders.put(type, player.getUniqueId());
+                    player.getInventory().setItem(slot, refreshVisuals(soulItem.modifySoulStack(item, getKarma(item), player.getUniqueId())));
                 }
             }
         }

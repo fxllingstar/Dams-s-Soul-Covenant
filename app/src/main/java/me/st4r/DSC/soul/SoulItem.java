@@ -32,6 +32,10 @@ public class SoulItem {
     }
 
     public ItemStack create(SoulType type) {
+        return create(type, null);
+    }
+
+    public ItemStack create(SoulType type, UUID holderUUID) {
         ItemStack item = new ItemStack(Material.NETHER_STAR);
         ItemMeta meta = item.getItemMeta();
         if (meta == null) return item;
@@ -41,9 +45,14 @@ public class SoulItem {
         PersistentDataContainer pdc = meta.getPersistentDataContainer();
         pdc.set(typeKey, PersistentDataType.STRING, type.name());
         pdc.set(karmaKey, PersistentDataType.INTEGER, type.getDefaultKarma());
+        if (holderUUID != null) {
+            pdc.set(holderKey, PersistentDataType.STRING, holderUUID.toString());
+        } else {
+            pdc.remove(holderKey);
+        }
 
         item.setItemMeta(meta);
-        return updateItemDisplay(item, type, type.getDefaultKarma(), null);
+        return updateItemDisplay(item, type, type.getDefaultKarma(), holderUUID);
     }
 
     public boolean isSoul(ItemStack item) {
@@ -97,8 +106,15 @@ public class SoulItem {
         ItemMeta meta = item.getItemMeta();
         if (meta == null) return item;
 
+        if (holderUUID == null) {
+            holderUUID = getHolder(item);
+        }
+        if (holderUUID == null && plugin.getSoulManager() != null) {
+            holderUUID = plugin.getSoulManager().getHolder(type);
+        }
+
         List<String> lore = new ArrayList<>();
-        lore.add(type.getColor() + "Soul");
+        lore.addAll(getSoulLore(type));
         lore.add("");
         lore.add(ChatColor.GRAY + "Karma State: " + (karma >= 0 ? ChatColor.GREEN : ChatColor.RED) + (karma >= 0 ? "+" : "") + karma);
 
@@ -112,5 +128,19 @@ public class SoulItem {
         meta.setLore(lore);
         item.setItemMeta(meta);
         return item;
+    }
+
+    private List<String> getSoulLore(SoulType type) {
+        List<String> lore = new ArrayList<>();
+        switch (type) {
+            case BRAVERY -> lore.add(ChatColor.GRAY + "\"It does not ask if you are ready. It only asks if you will move.\"");
+            case DETERMINATION -> lore.add(ChatColor.GRAY + "\"The mountain does not care how many times you have fallen. Neither does this soul.\"");
+            case JUSTICE -> lore.add(ChatColor.GRAY + "\"It has no mercy. It has no cruelty. It has only balance.\"");
+            case PERSEVERANCE -> lore.add(ChatColor.GRAY + "\"It was not forged in fire. It was worn smooth by rain - centuries of it.\"");
+            case PATIENCE -> lore.add(ChatColor.GRAY + "\"It has waited longer than you have been alive. It can wait a little longer.\"");
+            case INTEGRITY -> lore.add(ChatColor.GRAY + "\"It does not reward you for what you do when people are watching.\"");
+            case KINDNESS -> lore.add(ChatColor.GRAY + "\"It is not soft. It takes more strength than any of the others.\"");
+        }
+        return lore;
     }
 }
