@@ -33,7 +33,26 @@ The progress logic is surfaced in chat when the relevant event happens, but the 
 
 ### `/soul`
 
-Admin command for granting, inspecting, dropping, and listing souls.
+Admin command for granting, inspecting, dropping, listing, and triggering soul state events.
+
+Subcommands:
+
+- `give`
+- `giveall`
+- `drop`
+- `list`
+- `state`
+- `trigger state`
+- `trigger cycle`
+- `simulate <player> <soul|all>`
+
+### `/patience`
+
+Debug command for creating the Patience chest directly in the configured location.
+
+Permission:
+
+- `dsc.admin.patience`
 
 Permission:
 

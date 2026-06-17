@@ -101,4 +101,15 @@ public class IntegrityTracker {
         thirdPartyTradeCounts.clear();
         shatteredPlayers.clear();
     }
+
+    public void forceRewardReady(UUID playerUUID) {
+        if (playerUUID == null) return;
+
+        honoredPledgeCounts.put(playerUUID, HONORED_PLEDGE_THRESHOLD);
+        Set<UUID> partners = honoredPartnersByCreator.computeIfAbsent(playerUUID, unused -> new HashSet<>());
+        while (partners.size() < UNIQUE_PLAYER_THRESHOLD) {
+            partners.add(UUID.randomUUID());
+        }
+        shatteredPlayers.remove(playerUUID);
+    }
 }

@@ -13,21 +13,26 @@ import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 
+ @SuppressWarnings("deprecation")
+
 public class SoulCommand implements CommandExecutor, TabCompleter {
 
     private static final String PERMISSION = "dsc.admin.soul";
 
+    private final DSC plugin;
     private final SoulRegistery soulRegistery;
     private final SoulItem soulItem;
     private final SoulManager soulManager;
     private final SoulStateManager soulStateManager;
 
     public SoulCommand(DSC plugin) {
+        this.plugin = plugin;
         this.soulRegistery = plugin.getSoulRegistery();
         this.soulItem = plugin.getSoulItem();
         this.soulManager = plugin.getSoulManager();
@@ -52,6 +57,8 @@ public class SoulCommand implements CommandExecutor, TabCompleter {
             case "drop" -> handleDrop(sender, label, args);
             case "list" -> handleList(sender);
             case "state" -> handleState(sender);
+            case "trigger" -> handleTrigger(sender, label, args);
+            case "simulate" -> handleSimulate(sender, label, args);
             default -> {
                 sendUsage(sender, label);
                 yield true;
@@ -193,6 +200,65 @@ public class SoulCommand implements CommandExecutor, TabCompleter {
         return true;
     }
 
+    private boolean handleTrigger(CommandSender sender, String label, String[] args) {
+        if (args.length < 2) {
+            sender.sendMessage(ChatColor.YELLOW + "Usage: /" + label + " trigger <state|cycle>");
+            return true;
+        }
+
+        return switch (args[1].toLowerCase(Locale.ROOT)) {
+            case "state", "refresh", "evaluate" -> {
+                SoulStateManager.SoulStateSnapshot snapshot = soulStateManager.evaluateAndApplyNow();
+                sender.sendMessage(ChatColor.GREEN + "Triggered the soul state event. Current state: " + snapshot.state() + ".");
+                yield true;
+            }
+            case "cycle", "reset" -> {
+                String message = args.length > 2
+                    ? String.join(" ", Arrays.copyOfRange(args, 2, args.length))
+                    : ChatColor.GOLD + "The soul cycle was forced to end.";
+                plugin.resetCycle(message);
+                sender.sendMessage(ChatColor.GREEN + "Triggered the cycle reset event.");
+                yield true;
+            }
+            default -> {
+                sender.sendMessage(ChatColor.YELLOW + "Usage: /" + label + " trigger <state|cycle>");
+                yield true;
+            }
+        };
+    }
+
+    private boolean handleSimulate(CommandSender sender, String label, String[] args) {
+        if (args.length < 3) {
+            sender.sendMessage(ChatColor.YELLOW + "Usage: /" + label + " simulate <player> <soul|all>");
+            return true;
+        }
+
+        Player target = Bukkit.getPlayerExact(args[1]);
+        if (target == null) {
+            sender.sendMessage(ChatColor.RED + "That player must be online.");
+            return true;
+        }
+
+        if (args[2].equalsIgnoreCase("all")) {
+            int granted = plugin.simulateAllSoulAwards(target);
+            sender.sendMessage(ChatColor.GREEN + "Simulated " + granted + " soul award(s) for " + target.getName() + ".");
+            return true;
+        }
+
+        SoulType type = parseType(args[2]);
+        if (type == null) {
+            sender.sendMessage(ChatColor.RED + "Unknown soul type.");
+            return true;
+        }
+
+        if (plugin.simulateSoulAward(target, type)) {
+            sender.sendMessage(ChatColor.GREEN + "Simulated the Soul of " + type.getDisplayName() + " for " + target.getName() + ".");
+        } else {
+            sender.sendMessage(ChatColor.YELLOW + "Could not simulate that soul right now. It may already exist, or the debug path could not complete.");
+        }
+        return true;
+    }
+
     private SoulType parseType(String input) {
         return soulRegistery.getByName(input).orElse(null);
     }
@@ -218,18 +284,52 @@ public class SoulCommand implements CommandExecutor, TabCompleter {
     private void sendUsage(CommandSender sender, String label) {
             sender.sendMessage(ChatColor.AQUA + "/" + label + " give <player> <soul>");
             sender.sendMessage(ChatColor.AQUA + "/" + label + " giveall <player>");
-            sender.sendMessage(ChatColor.AQUA + "/" + label + " drop <soul>");
+        sender.sendMessage(ChatColor.AQUA + "/" + label + " drop <soul>");
         sender.sendMessage(ChatColor.AQUA + "/" + label + " list");
         sender.sendMessage(ChatColor.AQUA + "/" + label + " state");
+        sender.sendMessage(ChatColor.AQUA + "/" + label + " trigger <state|cycle>");
+        sender.sendMessage(ChatColor.AQUA + "/" + label + " simulate <player> <soul|all>");
     }
 
     @Override
     public List<String> onTabComplete(CommandSender sender, Command command, String alias, String[] args) {
         List<String> options = new ArrayList<>();
         if (args.length == 1) {
-            for (String option : List.of("give", "giveall", "drop", "list", "state")) {
+            for (String option : List.of("give", "giveall", "drop", "list", "state", "trigger", "simulate")) {
                 if (option.startsWith(args[0].toLowerCase(Locale.ROOT))) {
                     options.add(option);
+                }
+            }
+            return options;
+        }
+
+        if (args.length == 2 && args[0].equalsIgnoreCase("trigger")) {
+            for (String option : List.of("state", "cycle")) {
+                if (option.startsWith(args[1].toLowerCase(Locale.ROOT))) {
+                    options.add(option);
+                }
+            }
+            return options;
+        }
+
+        if (args.length == 2 && args[0].equalsIgnoreCase("simulate")) {
+            for (Player player : Bukkit.getOnlinePlayers()) {
+                if (player.getName().toLowerCase(Locale.ROOT).startsWith(args[1].toLowerCase(Locale.ROOT))) {
+                    options.add(player.getName());
+                }
+            }
+            return options;
+        }
+
+        if (args.length == 3 && args[0].equalsIgnoreCase("simulate")) {
+            String prefix = args[2].toLowerCase(Locale.ROOT);
+            if ("all".startsWith(prefix)) {
+                options.add("all");
+            }
+            for (SoulType type : soulRegistery.getRegisteredTypes()) {
+                if (type.name().toLowerCase(Locale.ROOT).startsWith(prefix)
+                    || type.getDisplayName().toLowerCase(Locale.ROOT).startsWith(prefix)) {
+                    options.add(type.name().toLowerCase(Locale.ROOT));
                 }
             }
             return options;

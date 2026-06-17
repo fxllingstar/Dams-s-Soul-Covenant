@@ -119,4 +119,12 @@ public class JusticeTracker {
         bountyHolders.clear();
         repeatedVictimKills.clear();
     }
+
+    public void forceRewardReady(UUID playerUUID) {
+        if (playerUUID == null) return;
+
+        killStreaks.put(playerUUID, MOST_WANTED_THRESHOLD);
+        killCounts.put(playerUUID, Math.max(killCounts.getOrDefault(playerUUID, 0), MOST_WANTED_THRESHOLD));
+        bountyHolders.add(playerUUID);
+    }
 }

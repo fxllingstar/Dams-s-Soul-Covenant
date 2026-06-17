@@ -122,21 +122,42 @@ public class KindnessTracker implements Listener {
         Bukkit.broadcastMessage("§a§l§m---------------------------------------");
 
         if (winner != null && winner.isOnline()) {
-            ItemStack kindnessSoul = soulItem.create(SoulType.KINDNESS, winner.getUniqueId());
-            Map<Integer, ItemStack> overflow = winner.getInventory().addItem(kindnessSoul);
-            if (overflow.isEmpty()) {
-                soulManager.setHolder(SoulType.KINDNESS, winner.getUniqueId());
-                soulManager.announceSoulAcquired(winner, SoulType.KINDNESS);
-            }
-            if (!overflow.isEmpty()) {
-                winner.getWorld().dropItemNaturally(winner.getLocation(), kindnessSoul);
-            }
-            winner.sendMessage("§a§k!§r §aYour profound aura of protection has materialized the Soul of Kindness directly to you. §a§k!");
+            grantKindnessSoul(winner, true);
         } else {
             ItemStack kindnessSoul = soulItem.create(SoulType.KINDNESS);
             Location spawn = Bukkit.getWorlds().get(0).getSpawnLocation();
             Bukkit.getWorlds().get(0).dropItemNaturally(spawn, kindnessSoul);
         }
+    }
+
+    public boolean forceReward(Player target) {
+        if (target == null || soulStateManager.isSoulPresent(SoulType.KINDNESS)) {
+            return false;
+        }
+
+        totalServerSaves = Math.max(totalServerSaves, 30);
+        soulSpawned = true;
+        return grantKindnessSoul(target, false);
+    }
+
+    private boolean grantKindnessSoul(Player winner, boolean sendPersonalMessage) {
+        if (winner == null || !winner.isOnline()) {
+            return false;
+        }
+
+        ItemStack kindnessSoul = soulItem.create(SoulType.KINDNESS, winner.getUniqueId());
+        Map<Integer, ItemStack> overflow = winner.getInventory().addItem(kindnessSoul);
+        if (overflow.isEmpty()) {
+            soulManager.setHolder(SoulType.KINDNESS, winner.getUniqueId());
+            soulManager.announceSoulAcquired(winner, SoulType.KINDNESS);
+        }
+        if (!overflow.isEmpty()) {
+            winner.getWorld().dropItemNaturally(winner.getLocation(), kindnessSoul);
+        }
+        if (sendPersonalMessage) {
+            winner.sendMessage("§a§k!§r §aYour profound aura of protection has materialized the Soul of Kindness directly to you. §a§k!");
+        }
+        return true;
     }
 
     /* ==========================================

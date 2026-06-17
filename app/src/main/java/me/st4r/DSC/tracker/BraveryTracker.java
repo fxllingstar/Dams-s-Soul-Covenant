@@ -90,6 +90,14 @@ public class BraveryTracker {
         rewardConsumed.add(playerUUID);
     }
 
+    public void forceRewardReady(UUID playerUUID) {
+        if (playerUUID == null) return;
+        deathCounts.put(playerUUID, DEATHS_REQUIRED);
+        cowardlyActCounts.put(playerUUID, DEATHS_REQUIRED);
+        rewardReady.add(playerUUID);
+        rewardConsumed.remove(playerUUID);
+    }
+
     public void reset(UUID playerUUID) {
         if (playerUUID == null) return;
         deathCounts.remove(playerUUID);

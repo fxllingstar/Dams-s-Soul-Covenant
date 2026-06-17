@@ -36,6 +36,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 
+@SuppressWarnings("deprecation")
 public class SoulProgressListener implements Listener {
 
     private static final long BRAVERY_COMBAT_WINDOW_MILLIS = 5L * 60L * 1000L;
@@ -307,6 +308,32 @@ public class SoulProgressListener implements Listener {
                 }
             }
         }
+    }
+
+    public boolean forcePatienceReward(Player player) {
+        if (player == null || soulStateManager.isSoulPresent(SoulType.PATIENCE)) {
+            return false;
+        }
+
+        UUID playerUUID = player.getUniqueId();
+        long now = System.currentTimeMillis();
+        long fastForward = now - PATIENCE_WINDOW_MILLIS - 1_000L;
+
+        onlineSince.put(playerUUID, fastForward);
+        lastAggressionAt.put(playerUUID, fastForward);
+        lastPatientProgressMinute.put(playerUUID, 15);
+
+        if (!isPatient(playerUUID, now)) {
+            return false;
+        }
+
+        if (plugin.grantSoul(player, SoulType.PATIENCE)) {
+            patientize(playerUUID);
+            lastPatientProgressMinute.put(playerUUID, 0);
+            return true;
+        }
+
+        return false;
     }
 
     private boolean isPatient(UUID playerUUID, long now) {

@@ -138,7 +138,7 @@ public class SoulStateManager {
         return currentSnapshot;
     }
 
-    private void evaluateAndApply() {
+    public SoulStateSnapshot evaluateAndApplyNow() {
         SoulStateSnapshot snapshot = evaluateNow();
 
         if (fractureHandler != null) {
@@ -148,6 +148,12 @@ public class SoulStateManager {
         if (resonanceHandler != null) {
             resonanceHandler.applySoulState(snapshot);
         }
+
+        return snapshot;
+    }
+
+    private void evaluateAndApply() {
+        evaluateAndApplyNow();
     }
 
     private SoulState determineState(int corruptedSouls) {

@@ -24,6 +24,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
+@SuppressWarnings("deprecation")
 public class SoulAltar {
 
     private static final Material ALTAR_BLOCK = Material.RESPAWN_ANCHOR;

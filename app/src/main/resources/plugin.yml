@@ -6,10 +6,16 @@ commands:
   pledge:
     description: Create and manage soul pledges.
     usage: /pledge
+  patience:
+    description: Debug command for creating the Patience chest.
+    usage: /patience create
   soul:
     description: Admin command for granting and inspecting souls.
     usage: /soul
 permissions:
   dsc.admin.soul:
     description: Allows use of the /soul admin command.
+    default: op
+  dsc.admin.patience:
+    description: Allows use of the /patience debug command.
     default: op
