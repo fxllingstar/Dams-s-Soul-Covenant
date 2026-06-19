@@ -1,6 +1,7 @@
 package me.st4r.DSC.patience;
 
 import me.st4r.DSC.DSC;
+import me.st4r.DSC.soul.SoulType;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.Location;
@@ -51,20 +52,32 @@ public class PatienceCommand implements CommandExecutor, TabCompleter {
     }
 
     private boolean handleCreate(CommandSender sender, String label) {
-        if (plugin.getSoulStateManager().isSoulPresent(me.st4r.DSC.soul.SoulType.PATIENCE)) {
+        if (plugin.getSoulStateManager().isSoulPresent(SoulType.PATIENCE)) {
             sender.sendMessage(ChatColor.YELLOW + "The Soul of Patience already exists somewhere in the world.");
             return true;
         }
 
-        Location chestLocation = plugin.seedPatienceChest(sender instanceof Player player ? player.getUniqueId() : null);
-        if (chestLocation == null || chestLocation.getWorld() == null) {
-            sender.sendMessage(ChatColor.RED + "Could not create the Patience chest. Check that the chest location is enabled in config.yml.");
+        DSC.PatienceChestSeedResult seedResult = plugin.seedPatienceChestDetailed(sender instanceof Player player ? player.getUniqueId() : null);
+        if (!seedResult.success()) {
+            sender.sendMessage(getCreateFailureMessage(seedResult.status()));
             return true;
         }
 
+        Location chestLocation = seedResult.location();
         highlightChest(chestLocation);
         sender.sendMessage(ChatColor.GREEN + "Created the Patience chest and highlighted it for nearby players.");
         return true;
+    }
+
+    private String getCreateFailureMessage(DSC.PatienceChestSeedStatus status) {
+        return switch (status) {
+            case ALREADY_PRESENT -> ChatColor.YELLOW + "The Soul of Patience already exists somewhere in the world.";
+            case LOCATION_UNAVAILABLE -> ChatColor.RED + "Could not create the Patience chest. Check that the chest location is enabled and the world is loaded in config.yml.";
+            case BLOCK_NOT_CHEST -> ChatColor.RED + "Created the Patience chest block, but the server did not expose it as a chest inventory.";
+            case INVENTORY_WRITE_FAILED -> ChatColor.RED + "Created the Patience chest, but could not place the soul item inside it. Check for protections or plugins affecting that block.";
+            case UNAVAILABLE -> ChatColor.RED + "Could not create the Patience chest because the soul systems are not ready.";
+            case SUCCESS -> ChatColor.GREEN + "Created the Patience chest.";
+        };
     }
 
     private void highlightChest(Location chestLocation) {

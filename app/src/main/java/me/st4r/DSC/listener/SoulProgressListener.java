@@ -29,6 +29,7 @@ import org.bukkit.event.entity.EntityDeathEvent;
 import org.bukkit.event.entity.PlayerDeathEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
+import org.bukkit.event.player.PlayerRespawnEvent;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.scheduler.BukkitRunnable;
 
@@ -54,6 +55,7 @@ public class SoulProgressListener implements Listener {
     private final PatienceTracker patienceTracker;
 
     private final Map<UUID, Long> lastDeathAt = new HashMap<>();
+    private final Map<UUID, SoulType> pendingSoulGrants = new HashMap<>();
 
     public SoulProgressListener(DSC plugin) {
         this.plugin = plugin;
@@ -77,6 +79,7 @@ public class SoulProgressListener implements Listener {
 
     public void resetRuntimeState() {
         lastDeathAt.clear();
+        pendingSoulGrants.clear();
     }
 
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
@@ -93,12 +96,16 @@ public class SoulProgressListener implements Listener {
 
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void onCombat(EntityDamageByEntityEvent event) {
-        Player attacker = resolvePlayerDamager(event.getDamager());
-        if (attacker == null) return;
-
         long now = System.currentTimeMillis();
-        UUID attackerUUID = attacker.getUniqueId();
-        braveryTracker.recordCombatEngagement(attackerUUID, now);
+
+        Player attacker = resolvePlayerDamager(event.getDamager());
+        if (attacker != null) {
+            braveryTracker.recordCombatEngagement(attacker.getUniqueId(), now);
+        }
+
+        if (event.getEntity() instanceof Player victim) {
+            braveryTracker.recordCombatEngagement(victim.getUniqueId(), now);
+        }
     }
 
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
@@ -155,10 +162,26 @@ public class SoulProgressListener implements Listener {
         justiceTracker.recordDeath(victimUUID);
 
         if (perseveranceTracker.hasFilledWithPerseverance(victimUUID)) {
-            if (plugin.grantSoul(victim, SoulType.PERSEVERANCE)) {
-                perseveranceTracker.markFillConsumed(victimUUID);
-            }
+            pendingSoulGrants.put(victimUUID, SoulType.PERSEVERANCE);
+            perseveranceTracker.markFillConsumed(victimUUID);
         }
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR)
+    public void onRespawn(PlayerRespawnEvent event) {
+        Player player = event.getPlayer();
+        UUID playerUUID = player.getUniqueId();
+
+        SoulType pendingSoul = pendingSoulGrants.remove(playerUUID);
+        if (pendingSoul == null) {
+            return;
+        }
+
+        Bukkit.getScheduler().runTaskLater(plugin, () -> {
+            if (player.isOnline()) {
+                plugin.grantSoul(player, pendingSoul);
+            }
+        }, 1L);
     }
 
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)

@@ -1,11 +1,13 @@
 package me.st4r.DSC;
 
 import me.st4r.DSC.altar.SoulAltar;
+import me.st4r.DSC.altar.AltarSpellCommand;
 import me.st4r.DSC.listener.SoulDropListener;
 import me.st4r.DSC.listener.SoulInteractListener;
 import me.st4r.DSC.listener.SoulProgressListener;
 import me.st4r.DSC.listener.SoulPickUpListener;
 import me.st4r.DSC.passive.PassiveEffectTask;
+import me.st4r.DSC.pledge.PledgeClaimListener;
 import me.st4r.DSC.pledge.PledgeCommand;
 import me.st4r.DSC.pledge.PledgeManager;
 import me.st4r.DSC.patience.PatienceCommand;
@@ -43,7 +45,23 @@ import org.bukkit.plugin.java.JavaPlugin;
 import java.util.Map;
 import java.util.UUID;
 
+@SuppressWarnings("deprecation")
 public final class DSC extends JavaPlugin {
+
+    public enum PatienceChestSeedStatus {
+        SUCCESS,
+        UNAVAILABLE,
+        ALREADY_PRESENT,
+        LOCATION_UNAVAILABLE,
+        BLOCK_NOT_CHEST,
+        INVENTORY_WRITE_FAILED
+    }
+
+    public record PatienceChestSeedResult(Location location, PatienceChestSeedStatus status) {
+        public boolean success() {
+            return status == PatienceChestSeedStatus.SUCCESS;
+        }
+    }
 
     private SoulItem soulItem;
     private SoulRegistery soulRegistery;
@@ -82,7 +100,7 @@ public final class DSC extends JavaPlugin {
         this.pledgeManager.load();
         this.soulStateManager = new SoulStateManager(this);
         this.fractureHandler = new FractureHandler();
-        this.resonanceHandler = new ResonanceHandler();
+        this.resonanceHandler = new ResonanceHandler(this);
         this.soulStateManager.setHandlers(fractureHandler, resonanceHandler);
         this.kindnessTracker = new KindnessTracker(this);
         this.soulAltar = new SoulAltar(this);
@@ -92,6 +110,7 @@ public final class DSC extends JavaPlugin {
         getServer().getPluginManager().registerEvents(new SoulInteractListener(this), this);
         this.soulProgressListener = new SoulProgressListener(this);
         getServer().getPluginManager().registerEvents(soulProgressListener, this);
+        getServer().getPluginManager().registerEvents(new PledgeClaimListener(this), this);
         getServer().getPluginManager().registerEvents(fractureHandler, this);
         getServer().getPluginManager().registerEvents(resonanceHandler, this);
         getServer().getPluginManager().registerEvents(kindnessTracker, this);
@@ -99,6 +118,7 @@ public final class DSC extends JavaPlugin {
         registerPledgeCommand();
         registerPatienceCommand();
         registerSoulCommand();
+        registerAltarSpellCommand();
         new SoulParticleTask(this).runTaskTimer(this, 20L, 15L);
         this.passiveEffectTask.start();
         this.soulStateManager.start();
@@ -141,17 +161,22 @@ public final class DSC extends JavaPlugin {
     }
 
     public Location seedPatienceChest(UUID holderUUID) {
+        PatienceChestSeedResult result = seedPatienceChestDetailed(holderUUID);
+        return result.success() ? result.location() : null;
+    }
+
+    public PatienceChestSeedResult seedPatienceChestDetailed(UUID holderUUID) {
         if (soulItem == null || soulManager == null || soulStateManager == null) {
-            return null;
+            return new PatienceChestSeedResult(null, PatienceChestSeedStatus.UNAVAILABLE);
         }
 
         if (soulStateManager.isSoulPresent(SoulType.PATIENCE)) {
-            return null;
+            return new PatienceChestSeedResult(null, PatienceChestSeedStatus.ALREADY_PRESENT);
         }
 
         Location chestLocation = resolvePatienceChestLocation();
         if (chestLocation == null || chestLocation.getWorld() == null) {
-            return null;
+            return new PatienceChestSeedResult(chestLocation, PatienceChestSeedStatus.LOCATION_UNAVAILABLE);
         }
 
         var world = chestLocation.getWorld();
@@ -161,26 +186,31 @@ public final class DSC extends JavaPlugin {
         }
 
         if (!(world.getBlockAt(chestLocation).getState() instanceof Chest chest)) {
-            return null;
+            return new PatienceChestSeedResult(chestLocation, PatienceChestSeedStatus.BLOCK_NOT_CHEST);
         }
 
-        ItemStack soul = soulItem.create(SoulType.PATIENCE, holderUUID);
-        chest.getInventory().clear();
-        chest.getInventory().setItem(13, soul);
-        chest.update(true, true);
+        ItemStack soul = soulItem.create(SoulType.PATIENCE);
+        var blockInventory = chest.getBlockInventory();
+        blockInventory.clear();
+        blockInventory.setItem(13, soul.clone());
 
         if (!(world.getBlockAt(chestLocation).getState() instanceof Chest liveChest)) {
-            return null;
+            return new PatienceChestSeedResult(chestLocation, PatienceChestSeedStatus.BLOCK_NOT_CHEST);
         }
 
         ItemStack placedSoul = liveChest.getBlockInventory().getItem(13);
-        if (placedSoul == null || !soulItem.isSoul(placedSoul) || soulItem.getSoulType(placedSoul) != SoulType.PATIENCE) {
-            liveChest.getInventory().setItem(13, soul);
-            liveChest.update(true, true);
+        if (!isPatienceSoul(placedSoul)) {
+            liveChest.getBlockInventory().clear();
+            liveChest.getBlockInventory().setItem(13, soul.clone());
+            placedSoul = liveChest.getBlockInventory().getItem(13);
         }
 
-        soulManager.setHolder(SoulType.PATIENCE, holderUUID);
-        return chestLocation;
+        if (!isPatienceSoul(placedSoul)) {
+            return new PatienceChestSeedResult(chestLocation, PatienceChestSeedStatus.INVENTORY_WRITE_FAILED);
+        }
+
+        soulStateManager.evaluateAndApplyNow();
+        return new PatienceChestSeedResult(chestLocation, PatienceChestSeedStatus.SUCCESS);
     }
 
     public boolean simulateSoulAward(Player target, SoulType type) {
@@ -252,7 +282,6 @@ public final class DSC extends JavaPlugin {
     private boolean grantPatienceSoul(Player target) {
         Location chestLocation = seedPatienceChest(target.getUniqueId());
         if (chestLocation != null) {
-            soulManager.setHolder(SoulType.PATIENCE, target.getUniqueId());
             target.sendMessage(SoulType.PATIENCE.getColor() + "The Soul of Patience has been revealed in its chest.");
             return true;
         }
@@ -346,14 +375,18 @@ public final class DSC extends JavaPlugin {
             return;
         }
 
-        ItemStack[] contents = chest.getInventory().getContents();
+        var blockInventory = chest.getBlockInventory();
+        ItemStack[] contents = blockInventory.getContents();
         for (int slot = 0; slot < contents.length; slot++) {
             ItemStack item = contents[slot];
             if (item != null && soulItem.isSoul(item)) {
-                chest.getInventory().setItem(slot, null);
+                blockInventory.setItem(slot, null);
             }
         }
-        chest.update(true, true);
+    }
+
+    private boolean isPatienceSoul(ItemStack item) {
+        return item != null && soulItem.isSoul(item) && soulItem.getSoulType(item) == SoulType.PATIENCE;
     }
 
     private void registerPledgeCommand() {
@@ -390,6 +423,18 @@ public final class DSC extends JavaPlugin {
         this.soulCommand = new SoulCommand(this);
         soulCommand.setExecutor(this.soulCommand);
         soulCommand.setTabCompleter(this.soulCommand);
+    }
+
+    private void registerAltarSpellCommand() {
+        PluginCommand altarSpellCommand = getCommand("altarspell");
+        if (altarSpellCommand == null) {
+            getLogger().warning("Could not register /altarspell because plugin.yml is missing the command.");
+            return;
+        }
+
+        AltarSpellCommand executor = new AltarSpellCommand(this);
+        altarSpellCommand.setExecutor(executor);
+        altarSpellCommand.setTabCompleter(executor);
     }
 
     @Override

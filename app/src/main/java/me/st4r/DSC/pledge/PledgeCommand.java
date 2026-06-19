@@ -43,6 +43,7 @@ public class PledgeCommand implements CommandExecutor, TabCompleter {
             case "accept" -> accept(player, args);
             case "fulfill" -> fulfill(player, args);
             case "break" -> breakPledge(player, args);
+            case "claimitems" -> claimItems(player);
             case "list" -> list(player);
             case "info" -> info(player, args);
             default -> sendUsage(player);
@@ -101,8 +102,24 @@ public class PledgeCommand implements CommandExecutor, TabCompleter {
             player.sendMessage(ChatColor.RED + "You can only fulfill an active pledge you are part of.");
             return;
         }
+        if (result.alreadyFulfilled()) {
+            player.sendMessage(ChatColor.YELLOW + "You already logged fulfillment for pledge #" + pledge.getId() + ".");
+            return;
+        }
+        if (result.emptyHand()) {
+            player.sendMessage(ChatColor.YELLOW + "Hold the item stack you are offering in your main hand, then run /pledge fulfill " + pledge.getId() + ".");
+            return;
+        }
+        if (result.claimStorageFull()) {
+            player.sendMessage(ChatColor.RED + "The other player's pledge claim chest is full.");
+            return;
+        }
+        if (result.wrongItem()) {
+            player.sendMessage(ChatColor.RED + "Your held item does not match your pledge offer: " + result.expectedOffer());
+            return;
+        }
 
-        player.sendMessage(ChatColor.GREEN + "Fulfillment logged for pledge #" + pledge.getId() + ".");
+        player.sendMessage(ChatColor.GREEN + "Fulfillment logged for pledge #" + pledge.getId() + ". Your held stack was moved to their /pledge claimitems chest.");
         if (result.disqualifiedNow()) {
             player.sendMessage(ChatColor.YELLOW + "Both pledge members were online, so this pledge cannot count toward Integrity.");
         }
@@ -121,6 +138,15 @@ public class PledgeCommand implements CommandExecutor, TabCompleter {
         }
 
         player.sendMessage(ChatColor.RED + "Pledge #" + pledge.getId() + " has been broken.");
+    }
+
+    private void claimItems(Player player) {
+        if (pledgeManager.getClaimItemCount(player.getUniqueId()) == 0) {
+            player.sendMessage(ChatColor.GRAY + "You have no pledge items waiting to claim.");
+            return;
+        }
+
+        player.openInventory(pledgeManager.createClaimInventory(player));
     }
 
     private void list(Player player) {
@@ -157,6 +183,11 @@ public class PledgeCommand implements CommandExecutor, TabCompleter {
             Pledge pledge = pledgeManager.get(Integer.parseInt(args[1]));
             if (pledge == null) {
                 player.sendMessage(ChatColor.RED + "No pledge exists with that id.");
+                return null;
+            }
+            if (!pledge.involves(player.getUniqueId())) {
+                player.sendMessage(ChatColor.RED + "You are not part of that pledge.");
+                return null;
             }
             return pledge;
         } catch (NumberFormatException exception) {
@@ -167,13 +198,13 @@ public class PledgeCommand implements CommandExecutor, TabCompleter {
 
     private void sendUsage(Player player) {
         player.sendMessage(ChatColor.AQUA + "/pledge create <player> <your offer> | <their offer>");
-        player.sendMessage(ChatColor.AQUA + "/pledge accept <id>, /pledge fulfill <id>, /pledge break <id>, /pledge list, /pledge info <id>");
+        player.sendMessage(ChatColor.AQUA + "/pledge accept <id>, /pledge fulfill <id>, /pledge break <id>, /pledge claimitems, /pledge list, /pledge info <id>");
     }
 
     @Override
     public List<String> onTabComplete(CommandSender sender, Command command, String alias, String[] args) {
         if (args.length == 1) {
-            return List.of("create", "accept", "fulfill", "break", "list", "info").stream()
+            return List.of("create", "accept", "fulfill", "break", "claimitems", "list", "info").stream()
                 .filter(option -> option.startsWith(args[0].toLowerCase()))
                 .toList();
         }

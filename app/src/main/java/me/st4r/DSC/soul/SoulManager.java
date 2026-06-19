@@ -221,7 +221,9 @@ public class SoulManager {
         } else {
             meta.setDisplayName(type.getColor() + "Soul of " + type.getDisplayName());
             lore.add("");
-            lore.add(ChatColor.GRAY + "Karma State: " + ChatColor.GREEN + "+" + karma + ChatColor.GREEN + " [HEALTHY]");
+            ChatColor karmaColor = karma >= 0 ? ChatColor.GREEN : ChatColor.RED;
+            String karmaPrefix = karma >= 0 ? "+" : "";
+            lore.add(ChatColor.GRAY + "Karma State: " + karmaColor + karmaPrefix + karma + ChatColor.GREEN + " [HEALTHY]");
             lore.add(ChatColor.GRAY + "Current Holder: " + ChatColor.WHITE + holderName);
         }
 

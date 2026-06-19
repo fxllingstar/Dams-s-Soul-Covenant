@@ -39,6 +39,7 @@ import java.util.UUID;
 public class KindnessTracker implements Listener {
 
     private static final int OFFENSIVE_USE_THRESHOLD = 10;
+    private static final int OFFENSIVE_KARMA_PENALTY = 1;
 
     private final DSC plugin;
     private final SoulItem soulItem;
@@ -285,7 +286,7 @@ public class KindnessTracker implements Listener {
 
         event.setDamage(14.0);
 
-        soulManager.removeKarma(weapon, 8);
+        soulManager.removeKarma(weapon, OFFENSIVE_KARMA_PENALTY);
 
         ItemMeta meta = weapon.getItemMeta();
         if (meta != null) {

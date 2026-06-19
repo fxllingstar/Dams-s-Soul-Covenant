@@ -12,6 +12,9 @@ commands:
   soul:
     description: Admin command for granting and inspecting souls.
     usage: /soul
+  altarspell:
+    description: Cast spells through the Soul Altar.
+    usage: /altarspell <resonance open|resonance close|revive soul>
 permissions:
   dsc.admin.soul:
     description: Allows use of the /soul admin command.
