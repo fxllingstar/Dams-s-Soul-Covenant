@@ -140,6 +140,13 @@ public class KindnessTracker implements Listener {
         return grantKindnessSoul(target, false);
     }
 
+    public void clear() {
+        totalServerSaves = 0;
+        soulSpawned = false;
+        playerContributions.clear();
+        dailyPairsSaveRegistry.clear();
+    }
+
     private boolean grantKindnessSoul(Player winner, boolean sendPersonalMessage) {
         if (winner == null || !winner.isOnline()) {
             return false;

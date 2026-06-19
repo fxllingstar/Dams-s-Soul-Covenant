@@ -1,6 +1,5 @@
 package me.st4r.DSC.world;
 
-import me.st4r.DSC.world.SoulStateManager.SoulState;
 import me.st4r.DSC.world.SoulStateManager.SoulStateSnapshot;
 import org.bukkit.ChatColor;
 import org.bukkit.World;
@@ -22,8 +21,7 @@ public class ResonanceHandler implements Listener {
     public boolean canEnterResonance() {
         return currentSnapshot != null
             && currentSnapshot.allSoulsExist()
-            && currentSnapshot.corruptedSouls() < 3
-            && currentSnapshot.state() != SoulState.FRACTURE;
+            && currentSnapshot.corruptedSouls() < 3;
     }
 
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)

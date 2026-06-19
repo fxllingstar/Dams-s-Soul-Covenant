@@ -127,7 +127,8 @@ public final class DSC extends JavaPlugin {
         }
 
         int clampedCurrent = Math.max(0, Math.min(current, total));
-        player.sendMessage(type.getColor() + "(" + clampedCurrent + "/" + total + ")");
+        player.sendMessage(type.getColor() + type.getDisplayName()
+                + ChatColor.GRAY + " (" + clampedCurrent + "/" + total + ")");
     }
 
     public void sendProgress(Player player, String label, ChatColor color, int current, int total) {
@@ -153,20 +154,31 @@ public final class DSC extends JavaPlugin {
             return null;
         }
 
-        ItemStack soul = soulItem.create(SoulType.PATIENCE, holderUUID);
         var world = chestLocation.getWorld();
         var block = world.getBlockAt(chestLocation);
         if (block.getType() != Material.CHEST) {
-            block.setType(Material.CHEST);
+            block.setType(Material.CHEST, false);
         }
 
-        if (!(block.getState() instanceof Chest chest)) {
+        if (!(world.getBlockAt(chestLocation).getState() instanceof Chest chest)) {
             return null;
         }
 
-        chest.getBlockInventory().clear();
-        chest.getBlockInventory().setItem(13, soul);
-        chest.update(true, false);
+        ItemStack soul = soulItem.create(SoulType.PATIENCE, holderUUID);
+        chest.getInventory().clear();
+        chest.getInventory().setItem(13, soul);
+        chest.update(true, true);
+
+        if (!(world.getBlockAt(chestLocation).getState() instanceof Chest liveChest)) {
+            return null;
+        }
+
+        ItemStack placedSoul = liveChest.getBlockInventory().getItem(13);
+        if (placedSoul == null || !soulItem.isSoul(placedSoul) || soulItem.getSoulType(placedSoul) != SoulType.PATIENCE) {
+            liveChest.getInventory().setItem(13, soul);
+            liveChest.update(true, true);
+        }
+
         soulManager.setHolder(SoulType.PATIENCE, holderUUID);
         return chestLocation;
     }
@@ -241,7 +253,7 @@ public final class DSC extends JavaPlugin {
         Location chestLocation = seedPatienceChest(target.getUniqueId());
         if (chestLocation != null) {
             soulManager.setHolder(SoulType.PATIENCE, target.getUniqueId());
-            sendSoulProgress(target, SoulType.PATIENCE, 15, 15);
+            target.sendMessage(SoulType.PATIENCE.getColor() + "The Soul of Patience has been revealed in its chest.");
             return true;
         }
 
@@ -305,6 +317,7 @@ public final class DSC extends JavaPlugin {
         perseveranceTracker.clear();
         patienceTracker.clear();
         integrityTracker.clear();
+        kindnessTracker.clear();
         pledgeManager.clear();
 
         if (soulStateManager != null) {
@@ -333,14 +346,14 @@ public final class DSC extends JavaPlugin {
             return;
         }
 
-        ItemStack[] contents = chest.getBlockInventory().getContents();
+        ItemStack[] contents = chest.getInventory().getContents();
         for (int slot = 0; slot < contents.length; slot++) {
             ItemStack item = contents[slot];
             if (item != null && soulItem.isSoul(item)) {
-                chest.getBlockInventory().setItem(slot, null);
+                chest.getInventory().setItem(slot, null);
             }
         }
-        chest.update(true, false);
+        chest.update(true, true);
     }
 
     private void registerPledgeCommand() {

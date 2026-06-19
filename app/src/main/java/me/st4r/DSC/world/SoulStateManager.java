@@ -43,6 +43,7 @@ public class SoulStateManager {
     private final DSC plugin;
     private final SoulItem soulItem;
     private final SoulManager soulManager;
+    private final Map<SoulType, ItemStack> lastKnownSouls = new EnumMap<>(SoulType.class);
 
     private SoulStateSnapshot currentSnapshot;
     private FractureHandler fractureHandler;
@@ -97,7 +98,7 @@ public class SoulStateManager {
     }
 
     public boolean isSoulPresent(SoulType type) {
-        return findTrackedSoul(type) != null;
+        return findTrackedSoul(type) != null || soulManager.getHolder(type) != null;
     }
 
     public SoulStateSnapshot evaluateNow() {
@@ -110,10 +111,12 @@ public class SoulStateManager {
         for (SoulType type : SoulType.values()) {
             ItemStack soulStack = findTrackedSoul(type);
             if (soulStack == null) {
+                lastKnownSouls.remove(type);
                 corruptedBySoul.put(type, false);
                 continue;
             }
 
+            lastKnownSouls.put(type, soulStack.clone());
             existingSouls++;
             int karma = soulManager.getKarma(soulStack);
             boolean corrupted = soulManager.isCorrupted(soulStack) || soulManager.isShattered(soulStack);
@@ -188,6 +191,13 @@ public class SoulStateManager {
                 if (stack != null && soulItem.isSoul(stack) && soulItem.getSoulType(stack) == type) {
                     return stack;
                 }
+            }
+        }
+
+        if (holderUUID != null) {
+            ItemStack cachedSoul = lastKnownSouls.get(type);
+            if (cachedSoul != null) {
+                return cachedSoul.clone();
             }
         }
 

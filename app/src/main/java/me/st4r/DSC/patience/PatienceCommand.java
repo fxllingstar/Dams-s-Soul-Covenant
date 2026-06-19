@@ -16,6 +16,7 @@ import org.bukkit.scheduler.BukkitTask;
 import java.util.List;
 import java.util.Locale;
 
+@SuppressWarnings("deprecation")
 public class PatienceCommand implements CommandExecutor, TabCompleter {
 
     private static final String PERMISSION = "dsc.admin.patience";
