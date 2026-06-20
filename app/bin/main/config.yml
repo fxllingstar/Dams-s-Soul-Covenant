@@ -4,7 +4,7 @@ altar:
     enabled: true
     world: world
     x: -165
-    y: 131
+    y: 132
     z: -127
   anchors:
     bravery:
@@ -42,3 +42,12 @@ altar:
       x: -160.47
       y: 129.0
       z: -132.51
+patience:
+  chest:
+    enabled: true
+    world: world
+    x: -144
+    y: 128
+    z: -126
+resonance:
+  world: Resonance

@@ -86,11 +86,19 @@ public class SoulManager {
     }
 
     public ItemStack addKarma(ItemStack item, int amount) {
-        return modifyKarmaValue(item, amount);
+        ItemStack updatedItem = modifyKarmaValue(item, amount);
+        if (amount > 0) {
+            plugin.sendOverseerWhisper(getWhisperTarget(updatedItem));
+        }
+        return updatedItem;
     }
 
     public ItemStack removeKarma(ItemStack item, int amount) {
-        return modifyKarmaValue(item, -amount);
+        ItemStack updatedItem = modifyKarmaValue(item, -amount);
+        if (amount > 0) {
+            plugin.sendHollowWhisper(getWhisperTarget(updatedItem));
+        }
+        return updatedItem;
     }
 
     public boolean isCorrupted(ItemStack item) {
@@ -121,11 +129,15 @@ public class SoulManager {
 
     public ItemStack shatter(ItemStack item) {
         if (!soulItem.isSoul(item)) return item;
+        boolean alreadyShattered = isShattered(item);
         ItemMeta meta = item.getItemMeta();
         if (meta == null) return item;
 
         meta.getPersistentDataContainer().set(shatteredKey, PersistentDataType.BYTE, (byte) 1);
         item.setItemMeta(meta);
+        if (!alreadyShattered) {
+            plugin.sendHollowWhisper(getWhisperTarget(item));
+        }
         return refreshVisuals(item);
     }
 
@@ -138,6 +150,7 @@ public class SoulManager {
         pdc.remove(shatteredKey);
         pdc.set(karmaKey, PersistentDataType.INTEGER, 0);
         item.setItemMeta(meta);
+        plugin.sendOverseerWhisper(getWhisperTarget(item));
         return refreshVisuals(item);
     }
 
@@ -159,11 +172,13 @@ public class SoulManager {
 
     public void announceSoulAcquired(Player player, SoulType type) {
         if (player == null || type == null) return;
+        plugin.sendOverseerWhisper(player);
         Bukkit.broadcastMessage(ChatColor.GOLD + player.getName() + ChatColor.GRAY + " has recieved the soul of " + ChatColor.WHITE + type.getDisplayName() + ChatColor.GRAY + ".");
     }
 
     public void announceSoulPurified(Player player, SoulType type) {
         if (player == null || type == null) return;
+        plugin.sendOverseerWhisper(player);
         Bukkit.broadcastMessage(ChatColor.AQUA + player.getName() + ChatColor.GRAY + " has restored the Soul of " + ChatColor.WHITE + type.getDisplayName() + ChatColor.GRAY + " at the altar.");
     }
 
@@ -221,12 +236,23 @@ public class SoulManager {
         } else {
             meta.setDisplayName(type.getColor() + "Soul of " + type.getDisplayName());
             lore.add("");
-            lore.add(ChatColor.GRAY + "Karma State: " + ChatColor.GREEN + "+" + karma + ChatColor.GREEN + " [HEALTHY]");
+            ChatColor karmaColor = karma >= 0 ? ChatColor.GREEN : ChatColor.RED;
+            String karmaPrefix = karma >= 0 ? "+" : "";
+            lore.add(ChatColor.GRAY + "Karma State: " + karmaColor + karmaPrefix + karma + ChatColor.GREEN + " [HEALTHY]");
             lore.add(ChatColor.GRAY + "Current Holder: " + ChatColor.WHITE + holderName);
         }
 
         meta.setLore(lore);
         item.setItemMeta(meta);
         return item;
+    }
+
+    private Player getWhisperTarget(ItemStack item) {
+        UUID holderUUID = getHolder(item);
+        if (holderUUID == null) {
+            SoulType type = soulItem.getSoulType(item);
+            holderUUID = type == null ? null : activeHolders.get(type);
+        }
+        return holderUUID == null ? null : Bukkit.getPlayer(holderUUID);
     }
 }

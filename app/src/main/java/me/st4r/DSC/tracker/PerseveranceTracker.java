@@ -159,4 +159,13 @@ public class PerseveranceTracker {
         totalDungeonCompletions = 0;
         rewardWinner = null;
     }
+
+    public void forceRewardReady(UUID playerUUID) {
+        if (playerUUID == null) return;
+
+        dungeonCompletionCounts.put(playerUUID, DUNGEON_COMPLETION_THRESHOLD);
+        totalDungeonCompletions = Math.max(totalDungeonCompletions, DUNGEON_COMPLETION_THRESHOLD);
+        rewardWinner = playerUUID;
+        fillReadyPlayers.add(playerUUID);
+    }
 }

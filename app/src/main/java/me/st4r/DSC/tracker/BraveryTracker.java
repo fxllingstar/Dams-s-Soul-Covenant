@@ -46,9 +46,8 @@ public class BraveryTracker {
         if (playerUUID == null) return 0;
         int updatedCount = cowardlyActCounts.getOrDefault(playerUUID, 0) + 1;
         cowardlyActCounts.put(playerUUID, updatedCount);
-        if (updatedCount >= DEATHS_REQUIRED) {
-            rewardReady.add(playerUUID);
-        }
+        deathCounts.remove(playerUUID);
+        rewardReady.remove(playerUUID);
         return updatedCount;
     }
 
@@ -88,6 +87,14 @@ public class BraveryTracker {
         if (playerUUID == null) return;
         rewardReady.remove(playerUUID);
         rewardConsumed.add(playerUUID);
+    }
+
+    public void forceRewardReady(UUID playerUUID) {
+        if (playerUUID == null) return;
+        deathCounts.put(playerUUID, DEATHS_REQUIRED);
+        cowardlyActCounts.put(playerUUID, DEATHS_REQUIRED);
+        rewardReady.add(playerUUID);
+        rewardConsumed.remove(playerUUID);
     }
 
     public void reset(UUID playerUUID) {

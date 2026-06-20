@@ -89,6 +89,16 @@ public class DeterminationTracker {
         rewardConsumed.add(playerUUID);
     }
 
+    public void forceRewardReady(UUID playerUUID) {
+        if (playerUUID == null) return;
+
+        playerDeathCounts.put(playerUUID, SERVER_DEATH_THRESHOLD);
+        totalDeathCount = Math.max(totalDeathCount, SERVER_DEATH_THRESHOLD);
+        currentLeader = playerUUID;
+        currentLeaderDeaths = SERVER_DEATH_THRESHOLD;
+        rewardConsumed.remove(playerUUID);
+    }
+
     public int getLogoutOnDeathIncidents(UUID playerUUID) {
         if (playerUUID == null) return 0;
         return logoutOnDeathIncidents.getOrDefault(playerUUID, 0);

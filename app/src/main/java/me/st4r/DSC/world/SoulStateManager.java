@@ -1,6 +1,7 @@
 package me.st4r.DSC.world;
 
 import me.st4r.DSC.DSC;
+import me.st4r.DSC.event.ResonanceOpenEvent;
 import me.st4r.DSC.soul.SoulItem;
 import me.st4r.DSC.soul.SoulManager;
 import me.st4r.DSC.soul.SoulType;
@@ -43,11 +44,13 @@ public class SoulStateManager {
     private final DSC plugin;
     private final SoulItem soulItem;
     private final SoulManager soulManager;
+    private final Map<SoulType, ItemStack> lastKnownSouls = new EnumMap<>(SoulType.class);
 
     private SoulStateSnapshot currentSnapshot;
     private FractureHandler fractureHandler;
     private ResonanceHandler resonanceHandler;
     private BukkitTask task;
+    private boolean resonanceOpenEventFired;
 
     public SoulStateManager(DSC plugin) {
         this.plugin = plugin;
@@ -97,7 +100,17 @@ public class SoulStateManager {
     }
 
     public boolean isSoulPresent(SoulType type) {
-        return findTrackedSoul(type) != null;
+        if (findTrackedSoul(type) != null) {
+            return true;
+        }
+
+        UUID holderUUID = soulManager.getHolder(type);
+        if (holderUUID == null) {
+            return false;
+        }
+
+        Player holder = Bukkit.getPlayer(holderUUID);
+        return holder == null || !holder.isOnline();
     }
 
     public SoulStateSnapshot evaluateNow() {
@@ -110,10 +123,12 @@ public class SoulStateManager {
         for (SoulType type : SoulType.values()) {
             ItemStack soulStack = findTrackedSoul(type);
             if (soulStack == null) {
+                lastKnownSouls.remove(type);
                 corruptedBySoul.put(type, false);
                 continue;
             }
 
+            lastKnownSouls.put(type, soulStack.clone());
             existingSouls++;
             int karma = soulManager.getKarma(soulStack);
             boolean corrupted = soulManager.isCorrupted(soulStack) || soulManager.isShattered(soulStack);
@@ -138,7 +153,7 @@ public class SoulStateManager {
         return currentSnapshot;
     }
 
-    private void evaluateAndApply() {
+    public SoulStateSnapshot evaluateAndApplyNow() {
         SoulStateSnapshot snapshot = evaluateNow();
 
         if (fractureHandler != null) {
@@ -148,12 +163,35 @@ public class SoulStateManager {
         if (resonanceHandler != null) {
             resonanceHandler.applySoulState(snapshot);
         }
+
+        handleResonanceOpenTrigger(snapshot);
+
+        return snapshot;
+    }
+
+    private void evaluateAndApply() {
+        evaluateAndApplyNow();
     }
 
     private SoulState determineState(int corruptedSouls) {
         if (corruptedSouls >= 4) return SoulState.FRACTURE;
         if (corruptedSouls >= 3) return SoulState.DEGRADED;
         return SoulState.HEALTHY;
+    }
+
+    private void handleResonanceOpenTrigger(SoulStateSnapshot snapshot) {
+        boolean canOpenResonance = snapshot.allSoulsExist() && snapshot.corruptedSouls() < 3;
+        if (!canOpenResonance) {
+            resonanceOpenEventFired = false;
+            return;
+        }
+
+        if (resonanceOpenEventFired) {
+            return;
+        }
+
+        resonanceOpenEventFired = true;
+        Bukkit.getPluginManager().callEvent(new ResonanceOpenEvent(snapshot));
     }
 
     private ItemStack findTrackedSoul(SoulType type) {
@@ -165,9 +203,11 @@ public class SoulStateManager {
         }
 
         UUID holderUUID = soulManager.getHolder(type);
+        boolean holderOnline = false;
         if (holderUUID != null) {
             Player holder = Bukkit.getPlayer(holderUUID);
             if (holder != null && holder.isOnline()) {
+                holderOnline = true;
                 for (ItemStack item : holder.getInventory().getContents()) {
                     if (item != null && soulItem.isSoul(item) && soulItem.getSoulType(item) == type) {
                         return item;
@@ -182,6 +222,19 @@ public class SoulStateManager {
                 if (stack != null && soulItem.isSoul(stack) && soulItem.getSoulType(stack) == type) {
                     return stack;
                 }
+            }
+        }
+
+        if (holderUUID != null) {
+            if (holderOnline) {
+                soulManager.setHolder(type, null);
+                lastKnownSouls.remove(type);
+                return null;
+            }
+
+            ItemStack cachedSoul = lastKnownSouls.get(type);
+            if (cachedSoul != null) {
+                return cachedSoul.clone();
             }
         }
 
