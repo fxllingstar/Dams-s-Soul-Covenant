@@ -3,6 +3,7 @@ package me.st4r.DSC.listener;
 import me.st4r.DSC.DSC;
 import me.st4r.DSC.altar.SoulAltar;
 import me.st4r.DSC.soul.SoulItem;
+import org.bukkit.Material;
 import org.bukkit.block.Block;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
@@ -31,7 +32,7 @@ public class SoulInteractListener implements Listener {
         if (!soulAltar.isAltar(clickedBlock)) return;
 
         ItemStack heldItem = event.getPlayer().getInventory().getItemInMainHand();
-        if (!soulItem.isSoul(heldItem)) return;
+        if (!soulItem.isSoul(heldItem) && heldItem.getType() != Material.AIR) return;
 
         if (soulAltar.handleInteract(event.getPlayer(), clickedBlock, heldItem)) {
             event.setCancelled(true);

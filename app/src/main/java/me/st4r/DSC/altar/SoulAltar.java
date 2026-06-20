@@ -8,13 +8,18 @@ import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.Location;
 import org.bukkit.Material;
+import org.bukkit.Particle;
 import org.bukkit.World;
 import org.bukkit.block.Block;
-import org.bukkit.entity.ArmorStand;
+import org.bukkit.block.Chest;
+import org.bukkit.block.data.BlockData;
+import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.entity.Guardian;
+import org.bukkit.entity.Item;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.scheduler.BukkitRunnable;
+import org.bukkit.util.Vector;
 
 import java.util.ArrayList;
 import java.util.EnumMap;
@@ -36,6 +41,13 @@ public class SoulAltar {
     private static final int RESONANCE_OPEN_VOTES_REQUIRED = 2;
     private static final int RESONANCE_CLOSE_VOTES_REQUIRED = 6;
     private static final long RESONANCE_CLOSE_LOCK_MILLIS = 24L * 60L * 60L * 1000L;
+    private static final double BEAM_PARTICLE_STEP = 0.8D;
+    private static final int MAX_BEAM_PARTICLES = 80;
+    private static final double BEAM_CENTER_OFFSET_X = -1.0D;
+    private static final double BEAM_CENTER_OFFSET_Z = -1.0D;
+    private static final double LEGACY_GUARDIAN_CLEANUP_RADIUS = 4.0D;
+    private static final int LEGACY_PORTAL_START_OFFSET = -1;
+    private static final String PORTAL_RESTORE_PATH = "resonance.portal-restore";
 
     public enum ResonanceResult {
         OPENED,
@@ -77,8 +89,6 @@ public class SoulAltar {
     private final Set<SoulType> closeVotes = EnumSet.noneOf(SoulType.class);
 
     private BukkitRunnable beamTask;
-    private ArmorStand centerMarker;
-    private final List<Guardian> guardians = new ArrayList<>();
     private boolean resonanceOpened;
     private long resonanceOpenedAtMillis;
 
@@ -88,6 +98,8 @@ public class SoulAltar {
         this.soulManager = plugin.getSoulManager();
         this.resonanceOpenedAtMillis = plugin.getConfig().getLong("resonance.opened-at", 0L);
         loadAnchorLocations();
+        cleanupLegacyGuardianVisuals();
+        cleanupLegacyPortalIfCurrentMissing();
     }
 
     public boolean isAltar(Block block) {
@@ -95,8 +107,13 @@ public class SoulAltar {
     }
 
     public boolean handleInteract(Player player, Block block, ItemStack heldItem) {
-        if (player == null || block == null || !soulItem.isSoul(heldItem)) {
+        if (player == null || block == null) {
             return false;
+        }
+
+        if (!soulItem.isSoul(heldItem)) {
+            inspectAnchor(player, block);
+            return true;
         }
 
         SoulType type = soulItem.getSoulType(heldItem);
@@ -124,13 +141,19 @@ public class SoulAltar {
         String holderName = holderUUID == null ? "None" : safeName(holderUUID);
         String karmaState = describeKarmaState(heldItem);
 
-        player.sendMessage(ChatColor.AQUA + "Bound anchor for " + type.getDisplayName() + ": " + ChatColor.WHITE + holderName + ChatColor.GRAY + " | " + karmaState);
+        sendAnchorStatus(player, type, holderName, karmaState);
 
         boolean wasComplete = areAllSoulsAttuned();
-        attuneSoul(type, holderUUID == null ? player.getUniqueId() : holderUUID);
+        boolean newlyAttuned = attuneSoul(type, holderUUID == null ? player.getUniqueId() : holderUUID);
+        if (newlyAttuned) {
+            plugin.sendOverseerWhisper(player);
+        }
         if (!wasComplete && areAllSoulsAttuned()) {
             activateRitual();
-            Bukkit.broadcastMessage(ChatColor.LIGHT_PURPLE + "The Soul Altar is aligned. Soul carriers may vote with /altarspell resonance open.");
+            Bukkit.broadcastMessage(ChatColor.DARK_PURPLE + "[" + ChatColor.LIGHT_PURPLE + "Resonance" + ChatColor.DARK_PURPLE + "] "
+                + ChatColor.AQUA + "The Soul Altar is aligned. "
+                + ChatColor.GRAY + "Soul carriers may vote with "
+                + ChatColor.WHITE + "/altarspell resonance open" + ChatColor.GRAY + ".");
         }
 
         return true;
@@ -177,6 +200,9 @@ public class SoulAltar {
 
         boolean changed = openVotes.addAll(voterSouls);
         closeVotes.removeAll(voterSouls);
+        if (changed) {
+            plugin.sendOverseerWhisper(voter);
+        }
         if (openVotes.size() >= RESONANCE_OPEN_VOTES_REQUIRED) {
             ResonanceResult openResult = openResonance();
             if (openResult == ResonanceResult.CENTER_UNAVAILABLE) {
@@ -216,13 +242,34 @@ public class SoulAltar {
 
         boolean changed = closeVotes.addAll(voterSouls);
         openVotes.removeAll(voterSouls);
+        if (changed) {
+            plugin.sendOverseerWhisper(voter);
+        }
         if (closeVotes.size() >= RESONANCE_CLOSE_VOTES_REQUIRED) {
-            closeResonance();
+            closeResonance(ChatColor.DARK_PURPLE + "[" + ChatColor.LIGHT_PURPLE + "Resonance" + ChatColor.DARK_PURPLE + "] "
+                + ChatColor.GOLD + "The Resonance closes "
+                + ChatColor.GRAY + "as the soul carriers reach accord.");
             return voteOutcome(ResonanceVoteResult.CLOSED, RESONANCE_CLOSE_VOTES_REQUIRED, RESONANCE_CLOSE_VOTES_REQUIRED, voterSouls, 0L);
         }
 
         return voteOutcome(changed ? ResonanceVoteResult.VOTE_RECORDED : ResonanceVoteResult.ALREADY_VOTED,
             closeVotes.size(), RESONANCE_CLOSE_VOTES_REQUIRED, voterSouls, 0L);
+    }
+
+    public ResonanceVoteResult forceCloseResonance() {
+        Location center = resolveCenter();
+        if (center == null || center.getWorld() == null) {
+            return ResonanceVoteResult.CENTER_UNAVAILABLE;
+        }
+
+        if (!isResonanceOpen() && !hasPortalRestoreSnapshot() && !isLegacyPortalBuilt(center)) {
+            return ResonanceVoteResult.ALREADY_CLOSED;
+        }
+
+        closeResonance(ChatColor.DARK_PURPLE + "[" + ChatColor.LIGHT_PURPLE + "Resonance" + ChatColor.DARK_PURPLE + "] "
+            + ChatColor.GOLD + "The Resonance is forcibly closed "
+            + ChatColor.GRAY + "by an operator.");
+        return ResonanceVoteResult.CLOSED;
     }
 
     public long getCloseLockRemainingMillis() {
@@ -278,7 +325,7 @@ public class SoulAltar {
             beamTask = null;
         }
 
-        cleanupVisuals();
+        cleanupLegacyGuardianVisuals();
         attunedSouls.clear();
         attunedHolders.clear();
         openVotes.clear();
@@ -303,14 +350,16 @@ public class SoulAltar {
         }
     }
 
-    private void attuneSoul(SoulType type, UUID holderUUID) {
+    private boolean attuneSoul(SoulType type, UUID holderUUID) {
         if (holderUUID != null) {
             attunedHolders.put(type, holderUUID);
         }
 
         if (attunedSouls.add(type)) {
             Bukkit.broadcastMessage(ChatColor.GRAY + "The Soul of " + type.getDisplayName() + " resonates with its anchor.");
+            return true;
         }
+        return false;
     }
 
     private void activateRitual() {
@@ -318,73 +367,77 @@ public class SoulAltar {
             return;
         }
 
-        spawnVisuals();
         beamTask = new BukkitRunnable() {
             @Override
             public void run() {
-                refreshVisuals();
+                renderParticleBeams();
             }
         };
-        beamTask.runTaskTimer(plugin, 0L, 10L);
+        beamTask.runTaskTimer(plugin, 0L, 20L);
     }
 
-    private void spawnVisuals() {
-        cleanupVisuals();
-
+    private void renderParticleBeams() {
         Location center = resolveCenter();
         if (center == null || center.getWorld() == null) {
             return;
         }
 
-        centerMarker = center.getWorld().spawn(center.clone().add(0.0D, 0.2D, 0.0D), ArmorStand.class, stand -> {
-            stand.setVisible(false);
-            stand.setInvisible(true);
-            stand.setGravity(false);
-            stand.setMarker(true);
-            stand.setInvulnerable(true);
-            stand.setSilent(true);
-            stand.setPersistent(true);
-            stand.setCustomNameVisible(false);
-        });
-
+        Location beamCenter = resolveBeamCenter(center);
         for (Location anchorLocation : anchorLocations.values()) {
-            Guardian guardian = anchorLocation.getWorld().spawn(anchorLocation.clone().add(0.5D, 1.0D, 0.5D), Guardian.class, spawned -> {
-                spawned.setInvisible(true);
-                spawned.setSilent(true);
-                spawned.setInvulnerable(true);
-                spawned.setPersistent(true);
-                spawned.setAI(true);
-            });
-            guardian.setTarget(centerMarker);
-            guardians.add(guardian);
+            renderParticleBeam(anchorLocation.clone().add(0.5D, 1.05D, 0.5D), beamCenter);
         }
+
+        World world = center.getWorld();
+        world.spawnParticle(Particle.END_ROD, beamCenter, 10, 0.35D, 0.2D, 0.35D, 0.01D);
+        world.spawnParticle(Particle.ELECTRIC_SPARK, beamCenter, 12, 0.3D, 0.18D, 0.3D, 0.02D);
     }
 
-    private void refreshVisuals() {
-        if (centerMarker == null || centerMarker.isDead()) {
-            spawnVisuals();
+    private Location resolveBeamCenter(Location center) {
+        return center.clone().add(BEAM_CENTER_OFFSET_X, 0.35D, BEAM_CENTER_OFFSET_Z);
+    }
+
+    private void renderParticleBeam(Location start, Location end) {
+        if (start.getWorld() == null || end.getWorld() == null || !start.getWorld().equals(end.getWorld())) {
             return;
         }
 
-        for (Guardian guardian : guardians) {
-            if (guardian != null && !guardian.isDead()) {
-                guardian.setTarget(centerMarker);
+        World world = start.getWorld();
+        Vector delta = end.toVector().subtract(start.toVector());
+        double distance = delta.length();
+        if (distance <= 0.0D) {
+            return;
+        }
+
+        int particles = Math.max(1, Math.min(MAX_BEAM_PARTICLES, (int) Math.ceil(distance / BEAM_PARTICLE_STEP)));
+        Vector step = delta.normalize().multiply(distance / particles);
+        Location point = start.clone();
+        for (int i = 0; i <= particles; i++) {
+            world.spawnParticle(Particle.END_ROD, point, 1, 0.0D, 0.0D, 0.0D, 0.0D);
+            if (i % 4 == 0) {
+                world.spawnParticle(Particle.ELECTRIC_SPARK, point, 1, 0.03D, 0.03D, 0.03D, 0.0D);
             }
+            point.add(step);
         }
     }
 
-    private void cleanupVisuals() {
-        if (centerMarker != null) {
-            centerMarker.remove();
-            centerMarker = null;
+    private void cleanupLegacyGuardianVisuals() {
+        Set<Location> cleanupCenters = new HashSet<>(anchorLocations.values());
+        Location center = resolveCenter();
+        if (center != null) {
+            cleanupCenters.add(center);
         }
 
-        for (Guardian guardian : guardians) {
-            if (guardian != null) {
-                guardian.remove();
+        for (Location location : cleanupCenters) {
+            if (location == null || location.getWorld() == null) {
+                continue;
             }
+
+            location.getWorld().getNearbyEntitiesByType(Guardian.class, location, LEGACY_GUARDIAN_CLEANUP_RADIUS).forEach(guardian -> {
+                if (guardian.isInvisible() && guardian.isSilent()) {
+                    guardian.remove();
+                }
+            });
         }
-        guardians.clear();
     }
 
     private void consumeSoulCarrierHearts() {
@@ -405,7 +458,9 @@ public class SoulAltar {
 
             double newHealth = Math.max(1.0D, holder.getHealth() - RESONANCE_HEART_COST);
             holder.setHealth(newHealth);
-            holder.sendMessage(ChatColor.DARK_PURPLE + "The Resonance consumes five hearts from you.");
+            holder.sendMessage(ChatColor.DARK_PURPLE + "[" + ChatColor.LIGHT_PURPLE + "Resonance" + ChatColor.DARK_PURPLE + "] "
+                + ChatColor.RED + "The Resonance consumes "
+                + ChatColor.WHITE + "five hearts" + ChatColor.RED + " from you.");
         }
     }
 
@@ -415,17 +470,12 @@ public class SoulAltar {
         int startZ = getPortalStart(center.getBlockZ());
         int clearMaxY = world.getMaxHeight() - 1;
 
-        for (int x = startX; x < startX + RESONANCE_PORTAL_SIZE; x++) {
-            for (int z = startZ; z < startZ + RESONANCE_PORTAL_SIZE; z++) {
-                for (int y = RESONANCE_PORTAL_Y; y <= clearMaxY; y++) {
-                    world.getBlockAt(x, y, z).setType(Material.AIR, false);
-                }
-                world.getBlockAt(x, RESONANCE_PORTAL_Y, z).setType(Material.END_PORTAL, false);
-            }
-        }
+        clearLegacyResonancePortal(center);
+        snapshotPortalArea(world, startX, startZ, RESONANCE_PORTAL_Y, clearMaxY);
+        buildPortalArea(world, startX, startZ, clearMaxY);
     }
 
-    private void closeResonance() {
+    private void closeResonance(String broadcastMessage) {
         Location center = resolveCenter();
         if (center != null && center.getWorld() != null) {
             clearResonancePortal(center);
@@ -436,14 +486,129 @@ public class SoulAltar {
         openVotes.clear();
         closeVotes.clear();
         saveResonanceOpenedAt();
-        Bukkit.broadcastMessage(ChatColor.DARK_PURPLE + "The Resonance closes as the soul carriers reach accord.");
+        Bukkit.broadcastMessage(broadcastMessage);
     }
 
     private void clearResonancePortal(Location center) {
         World world = center.getWorld();
-        int startX = getPortalStart(center.getBlockX());
-        int startZ = getPortalStart(center.getBlockZ());
+        clearLegacyResonancePortal(center);
+        if (!restorePortalArea(center)) {
+            clearPortalArea(world, getPortalStart(center.getBlockX()), getPortalStart(center.getBlockZ()));
+        }
+    }
 
+    private void clearLegacyResonancePortal(Location center) {
+        clearPortalArea(center.getWorld(), getLegacyPortalStart(center.getBlockX()), getLegacyPortalStart(center.getBlockZ()));
+    }
+
+    private void cleanupLegacyPortalIfCurrentMissing() {
+        Location center = resolveCenter();
+        if (center != null && center.getWorld() != null && !isPortalBuilt()) {
+            clearLegacyResonancePortal(center);
+        }
+    }
+
+    private void snapshotPortalArea(World world, int startX, int startZ, int minY, int maxY) {
+        List<String> blocks = new ArrayList<>();
+        for (int x = startX; x < startX + RESONANCE_PORTAL_SIZE; x++) {
+            for (int z = startZ; z < startZ + RESONANCE_PORTAL_SIZE; z++) {
+                for (int y = minY; y <= maxY; y++) {
+                    Block block = world.getBlockAt(x, y, z);
+                    if (!block.getType().isAir()) {
+                        blocks.add((x - startX) + "," + (y - minY) + "," + (z - startZ) + "|" + block.getBlockData().getAsString());
+                    }
+                }
+            }
+        }
+
+        plugin.getConfig().set(PORTAL_RESTORE_PATH + ".world", world.getName());
+        plugin.getConfig().set(PORTAL_RESTORE_PATH + ".start-x", startX);
+        plugin.getConfig().set(PORTAL_RESTORE_PATH + ".start-z", startZ);
+        plugin.getConfig().set(PORTAL_RESTORE_PATH + ".min-y", minY);
+        plugin.getConfig().set(PORTAL_RESTORE_PATH + ".max-y", maxY);
+        plugin.getConfig().set(PORTAL_RESTORE_PATH + ".blocks", blocks);
+        plugin.saveConfig();
+    }
+
+    private boolean restorePortalArea(Location fallbackCenter) {
+        ConfigurationSection section = plugin.getConfig().getConfigurationSection(PORTAL_RESTORE_PATH);
+        if (section == null) {
+            return false;
+        }
+
+        String worldName = section.getString("world");
+        World world = worldName == null ? null : Bukkit.getWorld(worldName);
+        if (world == null) {
+            world = fallbackCenter.getWorld();
+        }
+        if (world == null) {
+            return false;
+        }
+
+        int startX = section.getInt("start-x");
+        int startZ = section.getInt("start-z");
+        int minY = section.getInt("min-y", RESONANCE_PORTAL_Y);
+        int maxY = section.getInt("max-y", world.getMaxHeight() - 1);
+        List<String> blocks = section.getStringList("blocks");
+        int failedBlocks = 0;
+
+        clearPortalColumn(world, startX, startZ, minY, maxY);
+        for (String entry : blocks) {
+            String[] parts = entry.split("\\|", 2);
+            if (parts.length != 2) {
+                failedBlocks++;
+                continue;
+            }
+
+            String[] relativeCoordinates = parts[0].split(",", 3);
+            if (relativeCoordinates.length != 3) {
+                failedBlocks++;
+                continue;
+            }
+
+            try {
+                int x = startX + Integer.parseInt(relativeCoordinates[0]);
+                int y = minY + Integer.parseInt(relativeCoordinates[1]);
+                int z = startZ + Integer.parseInt(relativeCoordinates[2]);
+                BlockData blockData = Bukkit.createBlockData(parts[1]);
+                world.getBlockAt(x, y, z).setBlockData(blockData, false);
+            } catch (IllegalArgumentException exception) {
+                failedBlocks++;
+            }
+        }
+
+        plugin.getConfig().set(PORTAL_RESTORE_PATH, null);
+        plugin.saveConfig();
+        if (failedBlocks > 0) {
+            plugin.getLogger().warning("Skipped " + failedBlocks + " resonance altar restore blocks because their saved block data was invalid.");
+        }
+        return true;
+    }
+
+    private boolean hasPortalRestoreSnapshot() {
+        return plugin.getConfig().isConfigurationSection(PORTAL_RESTORE_PATH);
+    }
+
+    private void buildPortalArea(World world, int startX, int startZ, int clearMaxY) {
+        clearPortalColumn(world, startX, startZ, RESONANCE_PORTAL_Y, clearMaxY);
+        for (int x = startX; x < startX + RESONANCE_PORTAL_SIZE; x++) {
+            for (int z = startZ; z < startZ + RESONANCE_PORTAL_SIZE; z++) {
+                world.getBlockAt(x, RESONANCE_PORTAL_Y, z).setType(Material.END_PORTAL, false);
+            }
+        }
+    }
+
+    private void clearPortalColumn(World world, int startX, int startZ, int minY, int maxY) {
+        for (int x = startX; x < startX + RESONANCE_PORTAL_SIZE; x++) {
+            for (int z = startZ; z < startZ + RESONANCE_PORTAL_SIZE; z++) {
+                for (int y = minY; y <= maxY; y++) {
+                    world.getBlockAt(x, y, z).setType(Material.AIR, false);
+                }
+            }
+        }
+    }
+
+    private void clearPortalArea(World world, int startX, int startZ) {
         for (int x = startX; x < startX + RESONANCE_PORTAL_SIZE; x++) {
             for (int z = startZ; z < startZ + RESONANCE_PORTAL_SIZE; z++) {
                 Block block = world.getBlockAt(x, RESONANCE_PORTAL_Y, z);
@@ -461,9 +626,14 @@ public class SoulAltar {
         }
 
         World world = center.getWorld();
-        int startX = getPortalStart(center.getBlockX());
-        int startZ = getPortalStart(center.getBlockZ());
+        return isPortalAreaBuilt(world, getPortalStart(center.getBlockX()), getPortalStart(center.getBlockZ()));
+    }
 
+    private boolean isLegacyPortalBuilt(Location center) {
+        return isPortalAreaBuilt(center.getWorld(), getLegacyPortalStart(center.getBlockX()), getLegacyPortalStart(center.getBlockZ()));
+    }
+
+    private boolean isPortalAreaBuilt(World world, int startX, int startZ) {
         for (int x = startX; x < startX + RESONANCE_PORTAL_SIZE; x++) {
             for (int z = startZ; z < startZ + RESONANCE_PORTAL_SIZE; z++) {
                 if (world.getBlockAt(x, RESONANCE_PORTAL_Y, z).getType() != Material.END_PORTAL) {
@@ -475,7 +645,11 @@ public class SoulAltar {
     }
 
     private int getPortalStart(int centerBlockCoordinate) {
-        return centerBlockCoordinate - 1;
+        return centerBlockCoordinate - (RESONANCE_PORTAL_SIZE / 2);
+    }
+
+    private int getLegacyPortalStart(int centerBlockCoordinate) {
+        return centerBlockCoordinate + LEGACY_PORTAL_START_OFFSET;
     }
 
     private ResonanceVoteOutcome voteOutcome(ResonanceVoteResult result, int votes, int requiredVotes, Set<SoulType> voterSouls, long remainingMillis) {
@@ -599,6 +773,120 @@ public class SoulAltar {
                 && block.getX() == location.getBlockX()
                 && block.getY() == location.getBlockY()
                 && block.getZ() == location.getBlockZ();
+    }
+
+    private void inspectAnchor(Player player, Block block) {
+        SoulType type = getAnchorType(block);
+        if (type == null) {
+            player.sendMessage(ChatColor.RED + "This anchor is not bound to a soul.");
+            return;
+        }
+
+        ItemStack soulStack = findKnownSoulStack(type);
+        UUID holderUUID = soulStack == null ? soulManager.getHolder(type) : soulManager.getHolder(soulStack);
+        if (holderUUID == null) {
+            holderUUID = attunedHolders.get(type);
+        }
+
+        sendAnchorStatus(
+            player,
+            type,
+            holderUUID == null ? "None" : safeName(holderUUID),
+            describeKarmaState(type, soulStack)
+        );
+    }
+
+    private SoulType getAnchorType(Block block) {
+        for (Map.Entry<SoulType, Location> entry : anchorLocations.entrySet()) {
+            if (matchesBlock(block, entry.getValue())) {
+                return entry.getKey();
+            }
+        }
+        return null;
+    }
+
+    private void sendAnchorStatus(Player player, SoulType type, String holderName, String karmaState) {
+        player.sendMessage(type.getColor() + "Soul of " + type.getDisplayName()
+            + ChatColor.GRAY + " | Holder: " + ChatColor.WHITE + holderName
+            + ChatColor.GRAY + " | " + karmaState);
+    }
+
+    private ItemStack findKnownSoulStack(SoulType type) {
+        if (type == SoulType.PATIENCE) {
+            ItemStack patienceSoul = findPatienceChestSoul();
+            if (patienceSoul != null) {
+                return patienceSoul;
+            }
+        }
+
+        UUID holderUUID = soulManager.getHolder(type);
+        if (holderUUID != null) {
+            Player holder = Bukkit.getPlayer(holderUUID);
+            if (holder != null && holder.isOnline()) {
+                ItemStack soul = findSoulInInventory(holder, type);
+                if (soul != null) {
+                    return soul;
+                }
+            }
+        }
+
+        for (World world : Bukkit.getWorlds()) {
+            for (Item itemEntity : world.getEntitiesByClass(Item.class)) {
+                ItemStack stack = itemEntity.getItemStack();
+                if (stack != null && soulItem.isSoul(stack) && soulItem.getSoulType(stack) == type) {
+                    return stack;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    private ItemStack findSoulInInventory(Player player, SoulType type) {
+        for (ItemStack item : player.getInventory().getContents()) {
+            if (item != null && soulItem.isSoul(item) && soulItem.getSoulType(item) == type) {
+                return item;
+            }
+        }
+        return null;
+    }
+
+    private ItemStack findPatienceChestSoul() {
+        Location chestLocation = plugin.resolvePatienceChestLocation();
+        if (chestLocation == null || chestLocation.getWorld() == null) {
+            return null;
+        }
+
+        Block block = chestLocation.getWorld().getBlockAt(chestLocation);
+        if (!(block.getState() instanceof Chest chest)) {
+            return null;
+        }
+
+        for (ItemStack item : chest.getBlockInventory().getContents()) {
+            if (item != null && soulItem.isSoul(item) && soulItem.getSoulType(item) == SoulType.PATIENCE) {
+                return item;
+            }
+        }
+
+        return null;
+    }
+
+    private String describeKarmaState(SoulType type, ItemStack item) {
+        if (item != null && soulItem.isSoul(item)) {
+            return describeKarmaState(item);
+        }
+
+        var snapshot = plugin.getSoulStateManager() == null ? null : plugin.getSoulStateManager().getCurrentSnapshot();
+        if (snapshot == null || !snapshot.karmaBySoul().containsKey(type)) {
+            return ChatColor.GRAY + "Karma State: " + ChatColor.DARK_GRAY + "UNKNOWN";
+        }
+
+        int karma = snapshot.karmaBySoul().get(type);
+        boolean corrupted = snapshot.corruptedBySoul().getOrDefault(type, false);
+        ChatColor karmaColor = karma >= 0 ? ChatColor.GREEN : ChatColor.RED;
+        String karmaPrefix = karma >= 0 ? "+" : "";
+        return ChatColor.GRAY + "Karma State: " + karmaColor + karmaPrefix + karma
+            + (corrupted ? ChatColor.RED + " [CORRUPTED]" : ChatColor.GREEN + " [HEALTHY]");
     }
 
     private String describeKarmaState(ItemStack item) {

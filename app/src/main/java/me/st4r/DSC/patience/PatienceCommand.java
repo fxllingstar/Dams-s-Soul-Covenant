@@ -4,13 +4,16 @@ import me.st4r.DSC.DSC;
 import me.st4r.DSC.soul.SoulType;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
+import org.bukkit.Color;
 import org.bukkit.Location;
 import org.bukkit.Particle;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
 import org.bukkit.command.TabCompleter;
-import org.bukkit.entity.ArmorStand;
+import org.bukkit.Material;
+import org.bukkit.entity.BlockDisplay;
+import org.bukkit.entity.Display;
 import org.bukkit.entity.Player;
 import org.bukkit.scheduler.BukkitTask;
 
@@ -24,7 +27,7 @@ public class PatienceCommand implements CommandExecutor, TabCompleter {
     private static final long HIGHLIGHT_DURATION_TICKS = 20L * 20L;
 
     private final DSC plugin;
-    private ArmorStand highlightMarker;
+    private BlockDisplay highlightMarker;
     private BukkitTask highlightCleanupTask;
 
     public PatienceCommand(DSC plugin) {
@@ -80,35 +83,37 @@ public class PatienceCommand implements CommandExecutor, TabCompleter {
         };
     }
 
-    private void highlightChest(Location chestLocation) {
+    public void highlightChest(Location chestLocation) {
         clearHighlight();
 
         if (chestLocation.getWorld() == null) {
             return;
         }
 
-        Location markerLocation = chestLocation.clone().add(0.5D, 1.15D, 0.5D);
-        highlightMarker = chestLocation.getWorld().spawn(markerLocation, ArmorStand.class, stand -> {
-            stand.setVisible(false);
-            stand.setInvisible(true);
-            stand.setGravity(false);
-            stand.setMarker(true);
-            stand.setInvulnerable(true);
-            stand.setSilent(true);
-            stand.setPersistent(false);
-            stand.setGlowing(true);
-            stand.setCustomName(ChatColor.AQUA + "Soul of Patience");
-            stand.setCustomNameVisible(false);
+        Location markerLocation = chestLocation.toBlockLocation();
+        highlightMarker = chestLocation.getWorld().spawn(markerLocation, BlockDisplay.class, display -> {
+            display.setBlock(chestLocation.getBlock().getType() == Material.CHEST
+                ? chestLocation.getBlock().getBlockData()
+                : Material.CHEST.createBlockData());
+            display.setGlowing(true);
+            display.setGlowColorOverride(Color.AQUA);
+            display.setBrightness(new Display.Brightness(15, 15));
+            display.setPersistent(false);
+            display.setShadowRadius(0.0F);
+            display.setViewRange(128.0F);
+            display.setCustomName(ChatColor.AQUA + "Soul of Patience");
+            display.setCustomNameVisible(false);
         });
 
         var world = chestLocation.getWorld();
-        world.spawnParticle(Particle.ELECTRIC_SPARK, markerLocation, 40, 0.35D, 0.45D, 0.35D, 0.02D);
-        world.spawnParticle(Particle.END_ROD, markerLocation, 24, 0.3D, 0.4D, 0.3D, 0.01D);
+        Location particleLocation = chestLocation.clone().add(0.5D, 1.15D, 0.5D);
+        world.spawnParticle(Particle.ELECTRIC_SPARK, particleLocation, 40, 0.35D, 0.45D, 0.35D, 0.02D);
+        world.spawnParticle(Particle.END_ROD, particleLocation, 24, 0.3D, 0.4D, 0.3D, 0.01D);
 
         for (Player player : Bukkit.getOnlinePlayers()) {
             if (player.getWorld().equals(world)) {
-                player.spawnParticle(Particle.ELECTRIC_SPARK, markerLocation, 16, 0.25D, 0.35D, 0.25D, 0.01D);
-                player.spawnParticle(Particle.END_ROD, markerLocation, 12, 0.2D, 0.3D, 0.2D, 0.01D);
+                player.spawnParticle(Particle.ELECTRIC_SPARK, particleLocation, 16, 0.25D, 0.35D, 0.25D, 0.01D);
+                player.spawnParticle(Particle.END_ROD, particleLocation, 12, 0.2D, 0.3D, 0.2D, 0.01D);
             } else {
                 player.sendMessage(ChatColor.AQUA + "The Patience chest has been revealed in " + world.getName() + ".");
             }

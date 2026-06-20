@@ -235,6 +235,7 @@ public class PledgeManager {
                 int targetHonoredCount = plugin.getIntegrityTracker().recordHonoredPledge(pledge.getTargetUUID(), pledge.getCreatorUUID(), false);
 
                 if (creator != null) {
+                    plugin.sendOverseerWhisper(creator);
                     plugin.sendSoulProgress(creator, SoulType.INTEGRITY, creatorHonoredCount, IntegrityTracker.HONORED_PLEDGE_THRESHOLD);
                     if (plugin.getIntegrityTracker().isEligibleForIntegrity(pledge.getCreatorUUID())) {
                         plugin.grantSoul(creator, SoulType.INTEGRITY);
@@ -242,6 +243,7 @@ public class PledgeManager {
                 }
 
                 if (target != null) {
+                    plugin.sendOverseerWhisper(target);
                     plugin.sendSoulProgress(target, SoulType.INTEGRITY, targetHonoredCount, IntegrityTracker.HONORED_PLEDGE_THRESHOLD);
                     if (plugin.getIntegrityTracker().isEligibleForIntegrity(pledge.getTargetUUID())) {
                         plugin.grantSoul(target, SoulType.INTEGRITY);
@@ -260,6 +262,7 @@ public class PledgeManager {
 
         pledge.setStatus(Status.BROKEN);
         UUID breakerUUID = player.getUniqueId();
+        plugin.sendHollowWhisper(player);
         int brokenCount = plugin.getIntegrityTracker().recordBrokenPledge(breakerUUID);
         if (plugin.getIntegrityTracker().isShattered(breakerUUID) && brokenCount >= IntegrityTracker.BROKEN_PLEDGE_THRESHOLD) {
             Player breaker = Bukkit.getPlayer(breakerUUID);

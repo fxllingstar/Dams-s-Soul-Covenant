@@ -6,6 +6,7 @@ import me.st4r.DSC.listener.SoulDropListener;
 import me.st4r.DSC.listener.SoulInteractListener;
 import me.st4r.DSC.listener.SoulProgressListener;
 import me.st4r.DSC.listener.SoulPickUpListener;
+import me.st4r.DSC.listener.SoulStorageListener;
 import me.st4r.DSC.passive.PassiveEffectTask;
 import me.st4r.DSC.pledge.PledgeClaimListener;
 import me.st4r.DSC.pledge.PledgeCommand;
@@ -41,6 +42,8 @@ import org.bukkit.entity.Player;
 import org.bukkit.block.Chest;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.java.JavaPlugin;
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.format.NamedTextColor;
 
 import java.util.Map;
 import java.util.UUID;
@@ -107,6 +110,7 @@ public final class DSC extends JavaPlugin {
         this.passiveEffectTask = new PassiveEffectTask(this);
         getServer().getPluginManager().registerEvents(new SoulDropListener(this), this);
         getServer().getPluginManager().registerEvents(new SoulPickUpListener(this), this);
+        getServer().getPluginManager().registerEvents(new SoulStorageListener(this), this);
         getServer().getPluginManager().registerEvents(new SoulInteractListener(this), this);
         this.soulProgressListener = new SoulProgressListener(this);
         getServer().getPluginManager().registerEvents(soulProgressListener, this);
@@ -158,6 +162,25 @@ public final class DSC extends JavaPlugin {
 
         int clampedCurrent = Math.max(0, Math.min(current, total));
         player.sendMessage(color + "(" + clampedCurrent + "/" + total + ")");
+    }
+
+    public void sendOverseerWhisper(Player player) {
+        if (player == null || !player.isOnline()) {
+            return;
+        }
+
+        player.sendActionBar(Component.text("The Overseer has noticed your actions...", NamedTextColor.GREEN));
+    }
+
+    public void sendHollowWhisper(Player player) {
+        if (player == null || !player.isOnline()) {
+            return;
+        }
+
+        player.sendActionBar(Component.text(
+            "The Hollow. It sees you. It saw your action... You feel the negative energy closing.",
+            NamedTextColor.DARK_RED
+        ));
     }
 
     public Location seedPatienceChest(UUID holderUUID) {
@@ -282,6 +305,10 @@ public final class DSC extends JavaPlugin {
     private boolean grantPatienceSoul(Player target) {
         Location chestLocation = seedPatienceChest(target.getUniqueId());
         if (chestLocation != null) {
+            if (patienceCommand != null) {
+                patienceCommand.highlightChest(chestLocation);
+            }
+            sendOverseerWhisper(target);
             target.sendMessage(SoulType.PATIENCE.getColor() + "The Soul of Patience has been revealed in its chest.");
             return true;
         }

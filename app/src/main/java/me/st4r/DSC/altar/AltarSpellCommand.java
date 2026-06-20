@@ -17,6 +17,8 @@ import java.util.stream.Collectors;
 @SuppressWarnings("deprecation")
 public class AltarSpellCommand implements CommandExecutor, TabCompleter {
 
+    private static final String PREFIX = ChatColor.DARK_PURPLE + "[" + ChatColor.LIGHT_PURPLE + "Resonance" + ChatColor.DARK_PURPLE + "] ";
+
     private final DSC plugin;
 
     public AltarSpellCommand(DSC plugin) {
@@ -34,6 +36,10 @@ public class AltarSpellCommand implements CommandExecutor, TabCompleter {
             return handleResonance(sender, label, args);
         }
 
+        if (args[0].equalsIgnoreCase("forceclose")) {
+            return handleForceClose(sender);
+        }
+
         if (args[0].equalsIgnoreCase("revive") && args.length >= 2 && args[1].equalsIgnoreCase("soul")) {
             sender.sendMessage(ChatColor.YELLOW + "The revive soul spell has not been implemented yet.");
             return true;
@@ -45,7 +51,7 @@ public class AltarSpellCommand implements CommandExecutor, TabCompleter {
 
     private boolean handleResonance(CommandSender sender, String label, String[] args) {
         if (!(sender instanceof Player player)) {
-            sender.sendMessage(ChatColor.RED + "Only soul carriers can vote on the Resonance.");
+            sender.sendMessage(PREFIX + ChatColor.RED + "Only soul carriers can vote on the Resonance.");
             return true;
         }
 
@@ -68,25 +74,43 @@ public class AltarSpellCommand implements CommandExecutor, TabCompleter {
         return true;
     }
 
+    private boolean handleForceClose(CommandSender sender) {
+        if (!sender.hasPermission("dsc.admin.altarspell")) {
+            sender.sendMessage(PREFIX + ChatColor.RED + "You do not have permission to force close the Resonance.");
+            return true;
+        }
+
+        SoulAltar.ResonanceVoteResult result = plugin.getSoulAltar().forceCloseResonance();
+        switch (result) {
+            case CLOSED -> sender.sendMessage(PREFIX + ChatColor.GOLD + "The Resonance was force closed.");
+            case ALREADY_CLOSED -> sender.sendMessage(PREFIX + ChatColor.YELLOW + "The Resonance is already closed.");
+            case CENTER_UNAVAILABLE -> sender.sendMessage(PREFIX + ChatColor.RED + "The altar center is not available. Check altar.center in config.yml.");
+            default -> sender.sendMessage(PREFIX + ChatColor.RED + "The Resonance could not be force closed.");
+        }
+        return true;
+    }
+
     private boolean handleOpenVote(Player player, SoulAltar altar) {
         SoulAltar.ResonanceVoteOutcome outcome = altar.voteToOpen(player);
         switch (outcome.result()) {
-            case OPENED -> plugin.getServer().broadcastMessage(ChatColor.LIGHT_PURPLE + "The Resonance opens at the Soul Altar.");
-            case VOTE_RECORDED -> plugin.getServer().broadcastMessage(ChatColor.LIGHT_PURPLE + player.getName()
-                + ChatColor.GRAY + " voted to open the Resonance. "
-                + ChatColor.WHITE + outcome.votes() + "/" + outcome.requiredVotes());
-            case ALREADY_VOTED -> player.sendMessage(ChatColor.YELLOW + "Your soul vote is already counted to open the Resonance. "
-                + outcome.votes() + "/" + outcome.requiredVotes());
-            case ALREADY_OPEN -> player.sendMessage(ChatColor.LIGHT_PURPLE + "The Resonance is already open.");
-            case CENTER_UNAVAILABLE -> player.sendMessage(ChatColor.RED + "The altar center is not available. Check altar.center in config.yml.");
-            case NOT_SOUL_CARRIER -> player.sendMessage(ChatColor.RED + "Only current soul carriers can vote on the Resonance.");
+            case OPENED -> plugin.getServer().broadcastMessage(PREFIX + ChatColor.AQUA + "The Resonance "
+                + ChatColor.GREEN + "opens" + ChatColor.AQUA + " at the Soul Altar.");
+            case VOTE_RECORDED -> plugin.getServer().broadcastMessage(PREFIX + ChatColor.AQUA + player.getName()
+                + ChatColor.GRAY + " voted to " + ChatColor.GREEN + "open" + ChatColor.GRAY + " the Resonance "
+                + formatVoteProgress(outcome));
+            case ALREADY_VOTED -> player.sendMessage(PREFIX + ChatColor.YELLOW + "Your soul vote is already counted "
+                + ChatColor.GRAY + "to " + ChatColor.GREEN + "open" + ChatColor.GRAY + " the Resonance "
+                + formatVoteProgress(outcome));
+            case ALREADY_OPEN -> player.sendMessage(PREFIX + ChatColor.AQUA + "The Resonance is already open.");
+            case CENTER_UNAVAILABLE -> player.sendMessage(PREFIX + ChatColor.RED + "The altar center is not available. Check altar.center in config.yml.");
+            case NOT_SOUL_CARRIER -> player.sendMessage(PREFIX + ChatColor.RED + "Only current soul carriers can vote on the Resonance.");
             case NOT_READY -> {
                 String missing = altar.getMissingAttunedSouls().stream()
                     .map(SoulType::getDisplayName)
                     .collect(Collectors.joining(", "));
-                player.sendMessage(ChatColor.YELLOW + "The altar is missing: " + ChatColor.WHITE + missing);
+                player.sendMessage(PREFIX + ChatColor.GOLD + "The altar is missing: " + ChatColor.WHITE + missing);
             }
-            default -> player.sendMessage(ChatColor.RED + "That vote cannot be used to open the Resonance.");
+            default -> player.sendMessage(PREFIX + ChatColor.RED + "That vote cannot be used to open the Resonance.");
         }
         return true;
     }
@@ -94,18 +118,20 @@ public class AltarSpellCommand implements CommandExecutor, TabCompleter {
     private boolean handleCloseVote(Player player, SoulAltar altar) {
         SoulAltar.ResonanceVoteOutcome outcome = altar.voteToClose(player);
         switch (outcome.result()) {
-            case CLOSED -> player.sendMessage(ChatColor.DARK_PURPLE + "Your vote closes the Resonance.");
-            case VOTE_RECORDED -> plugin.getServer().broadcastMessage(ChatColor.DARK_PURPLE + player.getName()
-                + ChatColor.GRAY + " voted to close the Resonance. "
-                + ChatColor.WHITE + outcome.votes() + "/" + outcome.requiredVotes());
-            case ALREADY_VOTED -> player.sendMessage(ChatColor.YELLOW + "Your soul vote is already counted to close the Resonance. "
-                + outcome.votes() + "/" + outcome.requiredVotes());
-            case ALREADY_CLOSED -> player.sendMessage(ChatColor.YELLOW + "The Resonance is already closed.");
-            case TOO_EARLY -> player.sendMessage(ChatColor.YELLOW + "The Resonance must remain open for "
-                + formatDuration(outcome.remainingMillis()) + " more before close voting can begin.");
-            case PLAYERS_INSIDE -> player.sendMessage(ChatColor.RED + "The Resonance cannot close while someone is inside it.");
-            case NOT_SOUL_CARRIER -> player.sendMessage(ChatColor.RED + "Only current soul carriers can vote on the Resonance.");
-            default -> player.sendMessage(ChatColor.RED + "That vote cannot be used to close the Resonance.");
+            case CLOSED -> player.sendMessage(PREFIX + ChatColor.GOLD + "Your vote closes the Resonance.");
+            case VOTE_RECORDED -> plugin.getServer().broadcastMessage(PREFIX + ChatColor.AQUA + player.getName()
+                + ChatColor.GRAY + " voted to " + ChatColor.GOLD + "close" + ChatColor.GRAY + " the Resonance "
+                + formatVoteProgress(outcome));
+            case ALREADY_VOTED -> player.sendMessage(PREFIX + ChatColor.YELLOW + "Your soul vote is already counted "
+                + ChatColor.GRAY + "to " + ChatColor.GOLD + "close" + ChatColor.GRAY + " the Resonance "
+                + formatVoteProgress(outcome));
+            case ALREADY_CLOSED -> player.sendMessage(PREFIX + ChatColor.YELLOW + "The Resonance is already closed.");
+            case TOO_EARLY -> player.sendMessage(PREFIX + ChatColor.GOLD + "The Resonance must remain open for "
+                + ChatColor.WHITE + formatDuration(outcome.remainingMillis())
+                + ChatColor.GRAY + " more before close voting can begin.");
+            case PLAYERS_INSIDE -> player.sendMessage(PREFIX + ChatColor.RED + "The Resonance cannot close while someone is inside it.");
+            case NOT_SOUL_CARRIER -> player.sendMessage(PREFIX + ChatColor.RED + "Only current soul carriers can vote on the Resonance.");
+            default -> player.sendMessage(PREFIX + ChatColor.RED + "That vote cannot be used to close the Resonance.");
         }
         return true;
     }
@@ -113,6 +139,9 @@ public class AltarSpellCommand implements CommandExecutor, TabCompleter {
     private void sendUsage(CommandSender sender, String label) {
         sender.sendMessage(ChatColor.AQUA + "/" + label + " resonance open");
         sender.sendMessage(ChatColor.AQUA + "/" + label + " resonance close");
+        if (sender.hasPermission("dsc.admin.altarspell")) {
+            sender.sendMessage(ChatColor.AQUA + "/" + label + " forceclose");
+        }
         sender.sendMessage(ChatColor.AQUA + "/" + label + " revive soul");
     }
 
@@ -126,12 +155,21 @@ public class AltarSpellCommand implements CommandExecutor, TabCompleter {
         return minutes + "m";
     }
 
+    private String formatVoteProgress(SoulAltar.ResonanceVoteOutcome outcome) {
+        return ChatColor.DARK_GRAY + "[" + ChatColor.WHITE + outcome.votes()
+            + ChatColor.GRAY + "/" + ChatColor.WHITE + outcome.requiredVotes()
+            + ChatColor.DARK_GRAY + "]";
+    }
+
     @Override
     public List<String> onTabComplete(CommandSender sender, Command command, String alias, String[] args) {
         List<String> options = new ArrayList<>();
         if (args.length == 1) {
             String prefix = args[0].toLowerCase(Locale.ROOT);
-            for (String option : List.of("resonance", "revive")) {
+            List<String> rootOptions = sender.hasPermission("dsc.admin.altarspell")
+                ? List.of("resonance", "forceclose", "revive")
+                : List.of("resonance", "revive");
+            for (String option : rootOptions) {
                 if (option.startsWith(prefix)) {
                     options.add(option);
                 }
