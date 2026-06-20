@@ -168,4 +168,4 @@ app/build/libs/
 
 ## License
 
-GPL-V3
+GNU General Public License v3.0
