@@ -168,4 +168,4 @@ app/build/libs/
 
 ## License
 
-No license is currently specified in this repository.
+GPL-V3
