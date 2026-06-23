@@ -17,6 +17,7 @@ import me.st4r.DSC.soul.SoulManager;
 import me.st4r.DSC.soul.SoulCommand;
 import me.st4r.DSC.soul.SoulParticleTask;
 import me.st4r.DSC.soul.SoulRegistery;
+import me.st4r.DSC.soul.SoulRevealService;
 import me.st4r.DSC.soul.SoulType;
 import me.st4r.DSC.tracker.KindnessTracker;
 import me.st4r.DSC.tracker.BraveryTracker;
@@ -85,6 +86,7 @@ public final class DSC extends JavaPlugin {
     private SoulProgressListener soulProgressListener;
     private PassiveEffectTask passiveEffectTask;
     private KindnessTracker kindnessTracker;
+    private SoulRevealService soulRevealService;
 
     @Override
     public void onEnable() {
@@ -107,11 +109,13 @@ public final class DSC extends JavaPlugin {
         this.soulStateManager.setHandlers(fractureHandler, resonanceHandler);
         this.kindnessTracker = new KindnessTracker(this);
         this.soulAltar = new SoulAltar(this);
+        this.soulRevealService = new SoulRevealService(this);
         this.passiveEffectTask = new PassiveEffectTask(this);
         getServer().getPluginManager().registerEvents(new SoulDropListener(this), this);
         getServer().getPluginManager().registerEvents(new SoulPickUpListener(this), this);
         getServer().getPluginManager().registerEvents(new SoulStorageListener(this), this);
         getServer().getPluginManager().registerEvents(new SoulInteractListener(this), this);
+        getServer().getPluginManager().registerEvents(soulRevealService, this);
         this.soulProgressListener = new SoulProgressListener(this);
         getServer().getPluginManager().registerEvents(soulProgressListener, this);
         getServer().getPluginManager().registerEvents(new PledgeClaimListener(this), this);
@@ -123,8 +127,10 @@ public final class DSC extends JavaPlugin {
         registerPatienceCommand();
         registerSoulCommand();
         registerAltarSpellCommand();
+        registerSoulRevealCommand();
         new SoulParticleTask(this).runTaskTimer(this, 20L, 15L);
         this.passiveEffectTask.start();
+        this.soulRevealService.start();
         this.soulStateManager.start();
     }
 
@@ -144,6 +150,7 @@ public final class DSC extends JavaPlugin {
     public SoulAltar getSoulAltar() { return soulAltar; }
     public SoulProgressListener getSoulProgressListener() { return soulProgressListener; }
     public KindnessTracker getKindnessTracker() { return kindnessTracker; }
+    public SoulRevealService getSoulRevealService() { return soulRevealService; }
 
     public void sendSoulProgress(Player player, SoulType type, int current, int total) {
         if (player == null || type == null) {
@@ -367,6 +374,9 @@ public final class DSC extends JavaPlugin {
         clearPatienceChest();
 
         soulManager.clearAll();
+        if (soulRevealService != null) {
+            soulRevealService.clear();
+        }
         braveryTracker.clear();
         determinationTracker.clear();
         justiceTracker.clear();
@@ -464,6 +474,16 @@ public final class DSC extends JavaPlugin {
         altarSpellCommand.setTabCompleter(executor);
     }
 
+    private void registerSoulRevealCommand() {
+        PluginCommand soulRevealCommand = getCommand("sreveal");
+        if (soulRevealCommand == null) {
+            getLogger().warning("Could not register /sreveal because plugin.yml is missing the command.");
+            return;
+        }
+
+        soulRevealCommand.setExecutor(soulRevealService);
+    }
+
     @Override
     public void onDisable(){
         if (soulAltar != null) {
@@ -474,6 +494,9 @@ public final class DSC extends JavaPlugin {
         }
         if (passiveEffectTask != null) {
             passiveEffectTask.cancel();
+        }
+        if (soulRevealService != null) {
+            soulRevealService.stop();
         }
         if (soulStateManager != null) {
             soulStateManager.stop();

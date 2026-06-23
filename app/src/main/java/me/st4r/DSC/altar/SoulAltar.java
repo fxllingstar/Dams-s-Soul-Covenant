@@ -4,6 +4,7 @@ import me.st4r.DSC.DSC;
 import me.st4r.DSC.soul.SoulItem;
 import me.st4r.DSC.soul.SoulManager;
 import me.st4r.DSC.soul.SoulType;
+import me.st4r.DSC.world.SoulStateManager.SoulStateSnapshot;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.Location;
@@ -38,9 +39,6 @@ public class SoulAltar {
     private static final int RESONANCE_PORTAL_SIZE = 4;
     private static final int RESONANCE_PORTAL_Y = 129;
     private static final double RESONANCE_HEART_COST = 10.0D;
-    private static final int RESONANCE_OPEN_VOTES_REQUIRED = 2;
-    private static final int RESONANCE_CLOSE_VOTES_REQUIRED = 6;
-    private static final long RESONANCE_CLOSE_LOCK_MILLIS = 24L * 60L * 60L * 1000L;
     private static final double BEAM_PARTICLE_STEP = 0.8D;
     private static final int MAX_BEAM_PARTICLES = 80;
     private static final double BEAM_CENTER_OFFSET_X = -1.0D;
@@ -56,27 +54,10 @@ public class SoulAltar {
         CENTER_UNAVAILABLE
     }
 
-    public enum ResonanceVoteResult {
-        OPENED,
+    public enum ResonanceCloseResult {
         CLOSED,
-        VOTE_RECORDED,
-        ALREADY_VOTED,
-        ALREADY_OPEN,
         ALREADY_CLOSED,
-        NOT_READY,
-        NOT_SOUL_CARRIER,
-        CENTER_UNAVAILABLE,
-        TOO_EARLY,
-        PLAYERS_INSIDE
-    }
-
-    public record ResonanceVoteOutcome(
-        ResonanceVoteResult result,
-        int votes,
-        int requiredVotes,
-        Set<SoulType> voterSouls,
-        long remainingMillis
-    ) {
+        CENTER_UNAVAILABLE
     }
 
     private final DSC plugin;
@@ -85,8 +66,6 @@ public class SoulAltar {
     private final Map<SoulType, Location> anchorLocations = new EnumMap<>(SoulType.class);
     private final Set<SoulType> attunedSouls = new HashSet<>();
     private final Map<SoulType, UUID> attunedHolders = new EnumMap<>(SoulType.class);
-    private final Set<SoulType> openVotes = EnumSet.noneOf(SoulType.class);
-    private final Set<SoulType> closeVotes = EnumSet.noneOf(SoulType.class);
 
     private BukkitRunnable beamTask;
     private boolean resonanceOpened;
@@ -152,15 +131,37 @@ public class SoulAltar {
             activateRitual();
             Bukkit.broadcastMessage(ChatColor.DARK_PURPLE + "[" + ChatColor.LIGHT_PURPLE + "Resonance" + ChatColor.DARK_PURPLE + "] "
                 + ChatColor.AQUA + "The Soul Altar is aligned. "
-                + ChatColor.GRAY + "Soul carriers may vote with "
-                + ChatColor.WHITE + "/altarspell resonance open" + ChatColor.GRAY + ".");
+                + ChatColor.GRAY + "The Resonance will remain open while all seven souls exist and no more than two are corrupted.");
         }
 
         return true;
     }
 
     public ResonanceResult openResonance() {
-        if (!areAllSoulsAttuned()) {
+        return openResonance(true, true);
+    }
+
+    public void syncResonancePortal(SoulStateSnapshot snapshot) {
+        if (canMaintainResonance(snapshot)) {
+            openResonance(false, false);
+            return;
+        }
+
+        if (isResonanceOpen()) {
+            closeResonance(ChatColor.DARK_PURPLE + "[" + ChatColor.LIGHT_PURPLE + "Resonance" + ChatColor.DARK_PURPLE + "] "
+                + ChatColor.DARK_RED + "The Resonance closes "
+                + ChatColor.GRAY + "as the souls fall out of alignment.");
+        }
+    }
+
+    public boolean canMaintainResonance(SoulStateSnapshot snapshot) {
+        return snapshot != null
+            && snapshot.allSoulsExist()
+            && snapshot.corruptedSouls() <= 2;
+    }
+
+    private ResonanceResult openResonance(boolean requireAttunement, boolean chargeSoulCarriers) {
+        if (requireAttunement && !areAllSoulsAttuned()) {
             return ResonanceResult.NOT_READY;
         }
 
@@ -173,117 +174,30 @@ public class SoulAltar {
             return ResonanceResult.CENTER_UNAVAILABLE;
         }
 
-        plugin.getSoulStateManager().evaluateAndApplyNow();
-        consumeSoulCarrierHearts();
+        if (chargeSoulCarriers) {
+            consumeSoulCarrierHearts();
+        }
         buildResonancePortal(center);
         resonanceOpened = true;
         resonanceOpenedAtMillis = System.currentTimeMillis();
         saveResonanceOpenedAt();
-        openVotes.clear();
-        closeVotes.clear();
         return ResonanceResult.OPENED;
     }
 
-    public ResonanceVoteOutcome voteToOpen(Player voter) {
-        if (!areAllSoulsAttuned()) {
-            return voteOutcome(ResonanceVoteResult.NOT_READY, openVotes.size(), RESONANCE_OPEN_VOTES_REQUIRED, Set.of(), 0L);
-        }
-
-        if (isResonanceOpen()) {
-            return voteOutcome(ResonanceVoteResult.ALREADY_OPEN, openVotes.size(), RESONANCE_OPEN_VOTES_REQUIRED, Set.of(), 0L);
-        }
-
-        Set<SoulType> voterSouls = getVoteEligibleSouls(voter);
-        if (voterSouls.isEmpty()) {
-            return voteOutcome(ResonanceVoteResult.NOT_SOUL_CARRIER, openVotes.size(), RESONANCE_OPEN_VOTES_REQUIRED, Set.of(), 0L);
-        }
-
-        boolean changed = openVotes.addAll(voterSouls);
-        closeVotes.removeAll(voterSouls);
-        if (changed) {
-            plugin.sendOverseerWhisper(voter);
-        }
-        if (openVotes.size() >= RESONANCE_OPEN_VOTES_REQUIRED) {
-            ResonanceResult openResult = openResonance();
-            if (openResult == ResonanceResult.CENTER_UNAVAILABLE) {
-                return voteOutcome(ResonanceVoteResult.CENTER_UNAVAILABLE, openVotes.size(), RESONANCE_OPEN_VOTES_REQUIRED, voterSouls, 0L);
-            }
-            if (openResult == ResonanceResult.OPENED) {
-                return voteOutcome(ResonanceVoteResult.OPENED, RESONANCE_OPEN_VOTES_REQUIRED, RESONANCE_OPEN_VOTES_REQUIRED, voterSouls, 0L);
-            }
-            if (openResult == ResonanceResult.ALREADY_OPEN) {
-                return voteOutcome(ResonanceVoteResult.ALREADY_OPEN, openVotes.size(), RESONANCE_OPEN_VOTES_REQUIRED, voterSouls, 0L);
-            }
-            return voteOutcome(ResonanceVoteResult.NOT_READY, openVotes.size(), RESONANCE_OPEN_VOTES_REQUIRED, voterSouls, 0L);
-        }
-
-        return voteOutcome(changed ? ResonanceVoteResult.VOTE_RECORDED : ResonanceVoteResult.ALREADY_VOTED,
-            openVotes.size(), RESONANCE_OPEN_VOTES_REQUIRED, voterSouls, 0L);
-    }
-
-    public ResonanceVoteOutcome voteToClose(Player voter) {
-        if (!isResonanceOpen()) {
-            return voteOutcome(ResonanceVoteResult.ALREADY_CLOSED, closeVotes.size(), RESONANCE_CLOSE_VOTES_REQUIRED, Set.of(), 0L);
-        }
-
-        long remainingMillis = getCloseLockRemainingMillis();
-        if (remainingMillis > 0L) {
-            return voteOutcome(ResonanceVoteResult.TOO_EARLY, closeVotes.size(), RESONANCE_CLOSE_VOTES_REQUIRED, Set.of(), remainingMillis);
-        }
-
-        if (hasPlayersInResonance()) {
-            return voteOutcome(ResonanceVoteResult.PLAYERS_INSIDE, closeVotes.size(), RESONANCE_CLOSE_VOTES_REQUIRED, Set.of(), 0L);
-        }
-
-        Set<SoulType> voterSouls = getVoteEligibleSouls(voter);
-        if (voterSouls.isEmpty()) {
-            return voteOutcome(ResonanceVoteResult.NOT_SOUL_CARRIER, closeVotes.size(), RESONANCE_CLOSE_VOTES_REQUIRED, Set.of(), 0L);
-        }
-
-        boolean changed = closeVotes.addAll(voterSouls);
-        openVotes.removeAll(voterSouls);
-        if (changed) {
-            plugin.sendOverseerWhisper(voter);
-        }
-        if (closeVotes.size() >= RESONANCE_CLOSE_VOTES_REQUIRED) {
-            closeResonance(ChatColor.DARK_PURPLE + "[" + ChatColor.LIGHT_PURPLE + "Resonance" + ChatColor.DARK_PURPLE + "] "
-                + ChatColor.GOLD + "The Resonance closes "
-                + ChatColor.GRAY + "as the soul carriers reach accord.");
-            return voteOutcome(ResonanceVoteResult.CLOSED, RESONANCE_CLOSE_VOTES_REQUIRED, RESONANCE_CLOSE_VOTES_REQUIRED, voterSouls, 0L);
-        }
-
-        return voteOutcome(changed ? ResonanceVoteResult.VOTE_RECORDED : ResonanceVoteResult.ALREADY_VOTED,
-            closeVotes.size(), RESONANCE_CLOSE_VOTES_REQUIRED, voterSouls, 0L);
-    }
-
-    public ResonanceVoteResult forceCloseResonance() {
+    public ResonanceCloseResult forceCloseResonance() {
         Location center = resolveCenter();
         if (center == null || center.getWorld() == null) {
-            return ResonanceVoteResult.CENTER_UNAVAILABLE;
+            return ResonanceCloseResult.CENTER_UNAVAILABLE;
         }
 
         if (!isResonanceOpen() && !hasPortalRestoreSnapshot() && !isLegacyPortalBuilt(center)) {
-            return ResonanceVoteResult.ALREADY_CLOSED;
+            return ResonanceCloseResult.ALREADY_CLOSED;
         }
 
         closeResonance(ChatColor.DARK_PURPLE + "[" + ChatColor.LIGHT_PURPLE + "Resonance" + ChatColor.DARK_PURPLE + "] "
             + ChatColor.GOLD + "The Resonance is forcibly closed "
             + ChatColor.GRAY + "by an operator.");
-        return ResonanceVoteResult.CLOSED;
-    }
-
-    public long getCloseLockRemainingMillis() {
-        if (!isResonanceOpen()) {
-            return 0L;
-        }
-
-        if (resonanceOpenedAtMillis <= 0L) {
-            resonanceOpenedAtMillis = System.currentTimeMillis();
-            saveResonanceOpenedAt();
-        }
-
-        long closeAt = resonanceOpenedAtMillis + RESONANCE_CLOSE_LOCK_MILLIS;
-        return Math.max(0L, closeAt - System.currentTimeMillis());
+        return ResonanceCloseResult.CLOSED;
     }
 
     public boolean areAllSoulsAttuned() {
@@ -328,8 +242,6 @@ public class SoulAltar {
         cleanupLegacyGuardianVisuals();
         attunedSouls.clear();
         attunedHolders.clear();
-        openVotes.clear();
-        closeVotes.clear();
     }
 
     private void loadAnchorLocations() {
@@ -483,8 +395,6 @@ public class SoulAltar {
 
         resonanceOpened = false;
         resonanceOpenedAtMillis = 0L;
-        openVotes.clear();
-        closeVotes.clear();
         saveResonanceOpenedAt();
         Bukkit.broadcastMessage(broadcastMessage);
     }
@@ -650,61 +560,6 @@ public class SoulAltar {
 
     private int getLegacyPortalStart(int centerBlockCoordinate) {
         return centerBlockCoordinate + LEGACY_PORTAL_START_OFFSET;
-    }
-
-    private ResonanceVoteOutcome voteOutcome(ResonanceVoteResult result, int votes, int requiredVotes, Set<SoulType> voterSouls, long remainingMillis) {
-        return new ResonanceVoteOutcome(result, votes, requiredVotes, Set.copyOf(voterSouls), remainingMillis);
-    }
-
-    private Set<SoulType> getVoteEligibleSouls(Player player) {
-        if (player == null) {
-            return Set.of();
-        }
-
-        UUID playerUUID = player.getUniqueId();
-        Set<SoulType> eligibleSouls = EnumSet.noneOf(SoulType.class);
-        for (SoulType type : SoulType.values()) {
-            UUID activeHolder = soulManager.getHolder(type);
-            UUID attunedHolder = attunedHolders.get(type);
-            if (playerUUID.equals(activeHolder) || playerUUID.equals(attunedHolder)) {
-                eligibleSouls.add(type);
-            }
-        }
-
-        for (ItemStack item : player.getInventory().getContents()) {
-            if (item == null || !soulItem.isSoul(item)) {
-                continue;
-            }
-
-            SoulType type = soulItem.getSoulType(item);
-            if (type != null) {
-                eligibleSouls.add(type);
-            }
-        }
-
-        return eligibleSouls;
-    }
-
-    private boolean hasPlayersInResonance() {
-        String configuredName = plugin.getConfig().getString("resonance.world", "Resonance");
-        for (World world : Bukkit.getWorlds()) {
-            if (!isResonanceWorld(world, configuredName)) {
-                continue;
-            }
-            if (!world.getPlayers().isEmpty()) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private boolean isResonanceWorld(World world, String configuredName) {
-        if (world == null) {
-            return false;
-        }
-
-        return world.getName().equalsIgnoreCase(configuredName)
-            || world.getName().toLowerCase().contains("resonance");
     }
 
     private void saveResonanceOpenedAt() {

@@ -14,7 +14,10 @@ commands:
     usage: /soul
   altarspell:
     description: Cast spells through the Soul Altar.
-    usage: /altarspell <resonance open|resonance close|forceclose|revive soul>
+    usage: /altarspell <resonance|forceclose|revive soul>
+  sreveal:
+    description: Force the hourly soul location reveal.
+    usage: /sreveal
 permissions:
   dsc.admin.soul:
     description: Allows use of the /soul admin command.
@@ -24,4 +27,7 @@ permissions:
     default: op
   dsc.admin.altarspell:
     description: Allows forcing the Resonance closed.
+    default: op
+  dsc.admin.sreveal:
+    description: Allows forcing the soul location reveal.
     default: op

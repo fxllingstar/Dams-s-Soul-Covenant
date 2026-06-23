@@ -40,13 +40,13 @@ public class ResonanceHandler implements Listener {
     public boolean canEnterResonance() {
         return currentSnapshot != null
             && currentSnapshot.allSoulsExist()
-            && currentSnapshot.corruptedSouls() < 3;
+            && currentSnapshot.corruptedSouls() <= 2;
     }
 
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
     public void onPortal(PlayerPortalEvent event) {
         if (plugin.getSoulAltar().isResonancePortalBlock(event.getFrom().getBlock())) {
-            if (!plugin.getSoulAltar().isResonanceOpen() || !canEnterResonance()) {
+            if (!canEnterResonance()) {
                 event.setCancelled(true);
                 event.getPlayer().sendMessage(ChatColor.DARK_PURPLE + "The Resonance refuses to open. The souls are not aligned.");
                 return;
@@ -67,7 +67,7 @@ public class ResonanceHandler implements Listener {
             return;
         }
 
-        if (plugin.getSoulAltar().isResonanceOpen() && canEnterResonance()) {
+        if (canEnterResonance()) {
             return;
         }
 
@@ -85,7 +85,7 @@ public class ResonanceHandler implements Listener {
             return;
         }
 
-        if (!plugin.getSoulAltar().isResonanceOpen() || !canEnterResonance()) {
+        if (!canEnterResonance()) {
             event.getPlayer().sendMessage(ChatColor.DARK_PURPLE + "The Resonance refuses to open. The souls are not aligned.");
             return;
         }
