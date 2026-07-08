@@ -44,7 +44,8 @@ public class SoulAltar {
     private static final double BEAM_CENTER_OFFSET_X = -1.0D;
     private static final double BEAM_CENTER_OFFSET_Z = -1.0D;
     private static final double LEGACY_GUARDIAN_CLEANUP_RADIUS = 4.0D;
-    private static final int LEGACY_PORTAL_START_OFFSET = -1;
+    private static final int RESONANCE_PORTAL_START_OFFSET = -1;
+    private static final int OFFCENTER_PORTAL_START_OFFSET = -2;
     private static final String PORTAL_RESTORE_PATH = "resonance.portal-restore";
 
     public enum ResonanceResult {
@@ -408,7 +409,8 @@ public class SoulAltar {
     }
 
     private void clearLegacyResonancePortal(Location center) {
-        clearPortalArea(center.getWorld(), getLegacyPortalStart(center.getBlockX()), getLegacyPortalStart(center.getBlockZ()));
+        World world = center.getWorld();
+        clearPortalArea(world, getOffcenterPortalStart(center.getBlockX()), getOffcenterPortalStart(center.getBlockZ()));
     }
 
     private void cleanupLegacyPortalIfCurrentMissing() {
@@ -540,7 +542,7 @@ public class SoulAltar {
     }
 
     private boolean isLegacyPortalBuilt(Location center) {
-        return isPortalAreaBuilt(center.getWorld(), getLegacyPortalStart(center.getBlockX()), getLegacyPortalStart(center.getBlockZ()));
+        return isPortalAreaBuilt(center.getWorld(), getOffcenterPortalStart(center.getBlockX()), getOffcenterPortalStart(center.getBlockZ()));
     }
 
     private boolean isPortalAreaBuilt(World world, int startX, int startZ) {
@@ -555,11 +557,11 @@ public class SoulAltar {
     }
 
     private int getPortalStart(int centerBlockCoordinate) {
-        return centerBlockCoordinate - (RESONANCE_PORTAL_SIZE / 2);
+        return centerBlockCoordinate + RESONANCE_PORTAL_START_OFFSET;
     }
 
-    private int getLegacyPortalStart(int centerBlockCoordinate) {
-        return centerBlockCoordinate + LEGACY_PORTAL_START_OFFSET;
+    private int getOffcenterPortalStart(int centerBlockCoordinate) {
+        return centerBlockCoordinate + OFFCENTER_PORTAL_START_OFFSET;
     }
 
     private void saveResonanceOpenedAt() {
