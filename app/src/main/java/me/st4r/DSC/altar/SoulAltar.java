@@ -1,10 +1,14 @@
 package me.st4r.DSC.altar;
 
-import me.st4r.DSC.DSC;
-import me.st4r.DSC.soul.SoulItem;
-import me.st4r.DSC.soul.SoulManager;
-import me.st4r.DSC.soul.SoulType;
-import me.st4r.DSC.world.SoulStateManager.SoulStateSnapshot;
+import java.util.ArrayList;
+import java.util.EnumMap;
+import java.util.EnumSet;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.UUID;
+
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.Location;
@@ -22,14 +26,11 @@ import org.bukkit.inventory.ItemStack;
 import org.bukkit.scheduler.BukkitRunnable;
 import org.bukkit.util.Vector;
 
-import java.util.ArrayList;
-import java.util.EnumMap;
-import java.util.EnumSet;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.UUID;
+import me.st4r.DSC.DSC;
+import me.st4r.DSC.soul.SoulItem;
+import me.st4r.DSC.soul.SoulManager;
+import me.st4r.DSC.soul.SoulType;
+import me.st4r.DSC.world.SoulStateManager.SoulStateSnapshot;
 
 @SuppressWarnings("deprecation")
 public class SoulAltar {
@@ -47,11 +48,13 @@ public class SoulAltar {
     private static final int RESONANCE_PORTAL_START_OFFSET = -1;
     private static final int OFFCENTER_PORTAL_START_OFFSET = -2;
     private static final String PORTAL_RESTORE_PATH = "resonance.portal-restore";
+    private static final String FORCE_CLOSED_PATH = "resonance.force-closed";
 
     public enum ResonanceResult {
         OPENED,
         ALREADY_OPEN,
         NOT_READY,
+        FORCE_CLOSED,
         CENTER_UNAVAILABLE
     }
 
@@ -71,12 +74,14 @@ public class SoulAltar {
     private BukkitRunnable beamTask;
     private boolean resonanceOpened;
     private long resonanceOpenedAtMillis;
+    private boolean resonanceForceClosed;
 
     public SoulAltar(DSC plugin) {
         this.plugin = plugin;
         this.soulItem = plugin.getSoulItem();
         this.soulManager = plugin.getSoulManager();
         this.resonanceOpenedAtMillis = plugin.getConfig().getLong("resonance.opened-at", 0L);
+        this.resonanceForceClosed = plugin.getConfig().getBoolean(FORCE_CLOSED_PATH, false);
         loadAnchorLocations();
         cleanupLegacyGuardianVisuals();
         cleanupLegacyPortalIfCurrentMissing();
@@ -132,7 +137,7 @@ public class SoulAltar {
             activateRitual();
             Bukkit.broadcastMessage(ChatColor.DARK_PURPLE + "[" + ChatColor.LIGHT_PURPLE + "Resonance" + ChatColor.DARK_PURPLE + "] "
                 + ChatColor.AQUA + "The Soul Altar is aligned. "
-                + ChatColor.GRAY + "The Resonance will remain open while all seven souls exist and no more than two are corrupted.");
+                + ChatColor.GRAY + "The Resonance will remain open while all seven souls exist and no more than three are corrupted.");
         }
 
         return true;
@@ -143,6 +148,15 @@ public class SoulAltar {
     }
 
     public void syncResonancePortal(SoulStateSnapshot snapshot) {
+        if (resonanceForceClosed) {
+            if (isResonanceOpen()) {
+                closeResonance(ChatColor.DARK_PURPLE + "[" + ChatColor.LIGHT_PURPLE + "Resonance" + ChatColor.DARK_PURPLE + "] "
+                    + ChatColor.GOLD + "The Resonance remains sealed "
+                    + ChatColor.GRAY + "by an operator.");
+            }
+            return;
+        }
+
         if (canMaintainResonance(snapshot)) {
             openResonance(false, false);
             return;
@@ -158,10 +172,14 @@ public class SoulAltar {
     public boolean canMaintainResonance(SoulStateSnapshot snapshot) {
         return snapshot != null
             && snapshot.allSoulsExist()
-            && snapshot.corruptedSouls() <= 2;
+            && snapshot.corruptedSouls() <= 3;
     }
 
     private ResonanceResult openResonance(boolean requireAttunement, boolean chargeSoulCarriers) {
+        if (resonanceForceClosed) {
+            return ResonanceResult.FORCE_CLOSED;
+        }
+
         if (requireAttunement && !areAllSoulsAttuned()) {
             return ResonanceResult.NOT_READY;
         }
@@ -191,7 +209,14 @@ public class SoulAltar {
             return ResonanceCloseResult.CENTER_UNAVAILABLE;
         }
 
+        boolean wasForceClosed = resonanceForceClosed;
+        resonanceForceClosed = true;
+        saveResonanceForceClosed();
+
         if (!isResonanceOpen() && !hasPortalRestoreSnapshot() && !isLegacyPortalBuilt(center)) {
+            if (!wasForceClosed) {
+                return ResonanceCloseResult.CLOSED;
+            }
             return ResonanceCloseResult.ALREADY_CLOSED;
         }
 
@@ -199,6 +224,16 @@ public class SoulAltar {
             + ChatColor.GOLD + "The Resonance is forcibly closed "
             + ChatColor.GRAY + "by an operator.");
         return ResonanceCloseResult.CLOSED;
+    }
+
+    public ResonanceResult openAltar() {
+        resonanceForceClosed = false;
+        saveResonanceForceClosed();
+        return openResonance(false, false);
+    }
+
+    public boolean isResonanceForceClosed() {
+        return resonanceForceClosed;
     }
 
     public boolean areAllSoulsAttuned() {
@@ -569,6 +604,15 @@ public class SoulAltar {
             plugin.getConfig().set("resonance.opened-at", resonanceOpenedAtMillis);
         } else {
             plugin.getConfig().set("resonance.opened-at", null);
+        }
+        plugin.saveConfig();
+    }
+
+    private void saveResonanceForceClosed() {
+        if (resonanceForceClosed) {
+            plugin.getConfig().set(FORCE_CLOSED_PATH, true);
+        } else {
+            plugin.getConfig().set(FORCE_CLOSED_PATH, null);
         }
         plugin.saveConfig();
     }

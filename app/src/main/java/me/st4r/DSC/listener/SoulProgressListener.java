@@ -40,7 +40,7 @@ import java.util.UUID;
 @SuppressWarnings("deprecation")
 public class SoulProgressListener implements Listener {
 
-    private static final long BRAVERY_COMBAT_WINDOW_MILLIS = 5L * 60L * 1000L;
+    private static final long BRAVERY_COMBAT_WINDOW_MILLIS = 15L * 60L * 1000L;
     private static final long EVALUATION_PERIOD_TICKS = 20L * 30L;
 
     private final DSC plugin;

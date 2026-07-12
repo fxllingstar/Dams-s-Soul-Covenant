@@ -1,7 +1,7 @@
 package me.st4r.DSC;
 
 import me.st4r.DSC.altar.SoulAltar;
-import me.st4r.DSC.altar.AltarSpellCommand;
+import me.st4r.DSC.altar.ReviveSoulCommand;
 import me.st4r.DSC.listener.SoulDropListener;
 import me.st4r.DSC.listener.SoulInteractListener;
 import me.st4r.DSC.listener.SoulProgressListener;
@@ -126,7 +126,7 @@ public final class DSC extends JavaPlugin {
         registerPledgeCommand();
         registerPatienceCommand();
         registerSoulCommand();
-        registerAltarSpellCommand();
+        registerReviveSoulCommand();
         registerSoulRevealCommand();
         new SoulParticleTask(this).runTaskTimer(this, 20L, 15L);
         this.passiveEffectTask.start();
@@ -462,16 +462,14 @@ public final class DSC extends JavaPlugin {
         soulCommand.setTabCompleter(this.soulCommand);
     }
 
-    private void registerAltarSpellCommand() {
-        PluginCommand altarSpellCommand = getCommand("altarspell");
-        if (altarSpellCommand == null) {
-            getLogger().warning("Could not register /altarspell because plugin.yml is missing the command.");
+    private void registerReviveSoulCommand() {
+        PluginCommand reviveSoulCommand = getCommand("revivesoul");
+        if (reviveSoulCommand == null) {
+            getLogger().warning("Could not register /revivesoul because plugin.yml is missing the command.");
             return;
         }
 
-        AltarSpellCommand executor = new AltarSpellCommand(this);
-        altarSpellCommand.setExecutor(executor);
-        altarSpellCommand.setTabCompleter(executor);
+        reviveSoulCommand.setExecutor(new ReviveSoulCommand(this));
     }
 
     private void registerSoulRevealCommand() {

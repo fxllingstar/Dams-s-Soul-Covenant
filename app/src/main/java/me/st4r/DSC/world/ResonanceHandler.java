@@ -38,9 +38,13 @@ public class ResonanceHandler implements Listener {
     }
 
     public boolean canEnterResonance() {
+        if (plugin.getSoulAltar() != null && plugin.getSoulAltar().isResonanceForceClosed()) {
+            return false;
+        }
+
         return currentSnapshot != null
             && currentSnapshot.allSoulsExist()
-            && currentSnapshot.corruptedSouls() <= 2;
+            && currentSnapshot.corruptedSouls() <= 3;
     }
 
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)

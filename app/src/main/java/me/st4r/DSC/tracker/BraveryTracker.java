@@ -10,7 +10,7 @@ import java.util.UUID;
 
 public class BraveryTracker {
 
-    public static final int DEATHS_REQUIRED = 10;
+    public static final int DEATHS_REQUIRED = 5;
 
     private final Map<UUID, Integer> deathCounts = new HashMap<>();
     private final Map<UUID, Long> lastCombatAt = new HashMap<>();

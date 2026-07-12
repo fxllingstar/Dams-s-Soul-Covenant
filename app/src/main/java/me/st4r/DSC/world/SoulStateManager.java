@@ -184,7 +184,12 @@ public class SoulStateManager {
     }
 
     private void handleResonanceOpenTrigger(SoulStateSnapshot snapshot) {
-        boolean canOpenResonance = snapshot.allSoulsExist() && snapshot.corruptedSouls() <= 2;
+        if (plugin.getSoulAltar() != null && plugin.getSoulAltar().isResonanceForceClosed()) {
+            resonanceOpenEventFired = false;
+            return;
+        }
+
+        boolean canOpenResonance = snapshot.allSoulsExist() && snapshot.corruptedSouls() <= 3;
         if (!canOpenResonance) {
             resonanceOpenEventFired = false;
             return;

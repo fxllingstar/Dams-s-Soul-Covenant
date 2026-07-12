@@ -12,9 +12,9 @@ commands:
   soul:
     description: Admin command for granting and inspecting souls.
     usage: /soul
-  altarspell:
-    description: Cast spells through the Soul Altar.
-    usage: /altarspell <resonance|forceclose|revive soul>
+  revivesoul:
+    description: Revive a random corrupted soul.
+    usage: /revivesoul
   sreveal:
     description: Force the hourly soul location reveal.
     usage: /sreveal
@@ -24,9 +24,6 @@ permissions:
     default: op
   dsc.admin.patience:
     description: Allows use of the /patience debug command.
-    default: op
-  dsc.admin.altarspell:
-    description: Allows forcing the Resonance closed.
     default: op
   dsc.admin.sreveal:
     description: Allows forcing the soul location reveal.
