@@ -137,7 +137,7 @@ public class SoulAltar {
             activateRitual();
             Bukkit.broadcastMessage(ChatColor.DARK_PURPLE + "[" + ChatColor.LIGHT_PURPLE + "Resonance" + ChatColor.DARK_PURPLE + "] "
                 + ChatColor.AQUA + "The Soul Altar is aligned. "
-                + ChatColor.GRAY + "The Resonance will remain open while all seven souls exist and no more than three are corrupted.");
+                + ChatColor.GRAY + "Its revival ritual remains anchored here.");
         }
 
         return true;
@@ -148,31 +148,11 @@ public class SoulAltar {
     }
 
     public void syncResonancePortal(SoulStateSnapshot snapshot) {
-        if (resonanceForceClosed) {
-            if (isResonanceOpen()) {
-                closeResonance(ChatColor.DARK_PURPLE + "[" + ChatColor.LIGHT_PURPLE + "Resonance" + ChatColor.DARK_PURPLE + "] "
-                    + ChatColor.GOLD + "The Resonance remains sealed "
-                    + ChatColor.GRAY + "by an operator.");
-            }
-            return;
-        }
-
-        if (canMaintainResonance(snapshot)) {
-            openResonance(false, false);
-            return;
-        }
-
-        if (isResonanceOpen()) {
-            closeResonance(ChatColor.DARK_PURPLE + "[" + ChatColor.LIGHT_PURPLE + "Resonance" + ChatColor.DARK_PURPLE + "] "
-                + ChatColor.DARK_RED + "The Resonance closes "
-                + ChatColor.GRAY + "as the souls fall out of alignment.");
-        }
+        // Resonance state is now owned by AtaraxiaResonance.
     }
 
     public boolean canMaintainResonance(SoulStateSnapshot snapshot) {
-        return snapshot != null
-            && snapshot.allSoulsExist()
-            && snapshot.corruptedSouls() <= 3;
+        return snapshot != null && snapshot.meetsResonanceThreshold();
     }
 
     private ResonanceResult openResonance(boolean requireAttunement, boolean chargeSoulCarriers) {

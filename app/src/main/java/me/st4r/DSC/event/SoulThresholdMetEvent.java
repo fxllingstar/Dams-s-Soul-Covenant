@@ -5,12 +5,12 @@ import org.bukkit.event.Event;
 import org.bukkit.event.HandlerList;
 import org.jetbrains.annotations.NotNull;
 
-public class ResonanceOpenEvent extends Event {
+public class SoulThresholdMetEvent extends Event {
     private static final HandlerList HANDLERS = new HandlerList();
 
     private final SoulStateSnapshot snapshot;
 
-    public ResonanceOpenEvent(SoulStateSnapshot snapshot) {
+    public SoulThresholdMetEvent(SoulStateSnapshot snapshot) {
         this.snapshot = snapshot;
     }
 

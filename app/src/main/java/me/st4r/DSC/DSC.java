@@ -106,7 +106,7 @@ public final class DSC extends JavaPlugin {
         this.soulStateManager = new SoulStateManager(this);
         this.fractureHandler = new FractureHandler();
         this.resonanceHandler = new ResonanceHandler(this);
-        this.soulStateManager.setHandlers(fractureHandler, resonanceHandler);
+        this.soulStateManager.setHandlers(fractureHandler, null);
         this.kindnessTracker = new KindnessTracker(this);
         this.soulAltar = new SoulAltar(this);
         this.soulRevealService = new SoulRevealService(this);
@@ -120,7 +120,6 @@ public final class DSC extends JavaPlugin {
         getServer().getPluginManager().registerEvents(soulProgressListener, this);
         getServer().getPluginManager().registerEvents(new PledgeClaimListener(this), this);
         getServer().getPluginManager().registerEvents(fractureHandler, this);
-        getServer().getPluginManager().registerEvents(resonanceHandler, this);
         getServer().getPluginManager().registerEvents(kindnessTracker, this);
         this.soulManager.resynchronizeOnlineHolders();
         registerPledgeCommand();

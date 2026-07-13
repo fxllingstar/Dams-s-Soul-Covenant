@@ -25,12 +25,15 @@ import org.bukkit.scheduler.BukkitTask;
 import java.util.EnumMap;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.ThreadLocalRandom;
 
 @SuppressWarnings("deprecation")
 public class SoulRevealService implements CommandExecutor, Listener {
 
     private static final String PERMISSION = "dsc.admin.sreveal";
-    private static final long REVEAL_INTERVAL_TICKS = 20L * 60L * 60L;
+    private static final long REVEAL_INTERVAL_TICKS = 20L * 60L * 60L * 2L;
+    private static final int APPROXIMATE_XZ_RADIUS = 1000;
+    private static final int APPROXIMATE_Y_RADIUS = 20;
     private static final String LAST_KNOWN_PATH = "soul-reveal.last-known";
 
     private final DSC plugin;
@@ -72,8 +75,9 @@ public class SoulRevealService implements CommandExecutor, Listener {
         for (SoulType type : SoulType.values()) {
             Location location = resolveSoulLocation(type);
             if (location != null) {
+                Location approximateLocation = approximateLocation(location);
                 Bukkit.broadcastMessage(type.getColor() + "Soul of " + type.getDisplayName()
-                    + ChatColor.GRAY + " is at " + ChatColor.WHITE + formatLocation(location));
+                    + ChatColor.GRAY + " is near " + ChatColor.WHITE + formatLocation(approximateLocation));
             }
         }
     }
@@ -233,6 +237,25 @@ public class SoulRevealService implements CommandExecutor, Listener {
 
     private String formatLocation(Location location) {
         return "\"" + location.getBlockX() + ", " + location.getBlockY() + ", " + location.getBlockZ() + "\"";
+    }
+
+    private Location approximateLocation(Location exact) {
+        Location approximate = exact.clone();
+        ThreadLocalRandom random = ThreadLocalRandom.current();
+        approximate.add(
+            random.nextInt(-APPROXIMATE_XZ_RADIUS, APPROXIMATE_XZ_RADIUS + 1),
+            random.nextInt(-APPROXIMATE_Y_RADIUS, APPROXIMATE_Y_RADIUS + 1),
+            random.nextInt(-APPROXIMATE_XZ_RADIUS, APPROXIMATE_XZ_RADIUS + 1)
+        );
+
+        if (approximate.getWorld() != null) {
+            int minY = approximate.getWorld().getMinHeight();
+            int maxY = approximate.getWorld().getMaxHeight() - 1;
+            double clampedY = Math.max(minY, Math.min(maxY, approximate.getY()));
+            approximate.setY(clampedY);
+        }
+
+        return approximate;
     }
 
     private void loadLastKnownHolderLocations() {

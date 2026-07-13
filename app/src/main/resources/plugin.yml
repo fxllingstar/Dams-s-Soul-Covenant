@@ -16,7 +16,7 @@ commands:
     description: Revive a random corrupted soul.
     usage: /revivesoul
   sreveal:
-    description: Force the hourly soul location reveal.
+    description: Force the soul location reveal.
     usage: /sreveal
 permissions:
   dsc.admin.soul:

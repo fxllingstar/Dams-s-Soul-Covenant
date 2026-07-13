@@ -1,7 +1,8 @@
 package me.st4r.DSC.world;
 
 import me.st4r.DSC.DSC;
-import me.st4r.DSC.event.ResonanceOpenEvent;
+import me.st4r.DSC.event.SoulThresholdLostEvent;
+import me.st4r.DSC.event.SoulThresholdMetEvent;
 import me.st4r.DSC.soul.SoulItem;
 import me.st4r.DSC.soul.SoulManager;
 import me.st4r.DSC.soul.SoulType;
@@ -30,12 +31,17 @@ public class SoulStateManager {
         SoulState state,
         int corruptedSouls,
         int existingSouls,
+        int validResonanceSouls,
         int totalKarma,
         Map<SoulType, Integer> karmaBySoul,
         Map<SoulType, Boolean> corruptedBySoul
     ) {
         public boolean allSoulsExist() {
             return existingSouls >= SoulType.values().length;
+        }
+
+        public boolean meetsResonanceThreshold() {
+            return validResonanceSouls >= 5;
         }
     }
 
@@ -50,7 +56,7 @@ public class SoulStateManager {
     private FractureHandler fractureHandler;
     private ResonanceHandler resonanceHandler;
     private BukkitTask task;
-    private boolean resonanceOpenEventFired;
+    private boolean resonanceThresholdCurrentlyMet;
 
     public SoulStateManager(DSC plugin) {
         this.plugin = plugin;
@@ -58,6 +64,7 @@ public class SoulStateManager {
         this.soulManager = plugin.getSoulManager();
         this.currentSnapshot = new SoulStateSnapshot(
             SoulState.HEALTHY,
+            0,
             0,
             0,
             0,
@@ -117,6 +124,7 @@ public class SoulStateManager {
         Map<SoulType, Integer> karmaBySoul = new EnumMap<>(SoulType.class);
         Map<SoulType, Boolean> corruptedBySoul = new EnumMap<>(SoulType.class);
         int existingSouls = 0;
+        int validResonanceSouls = 0;
         int corruptedSouls = 0;
         int totalKarma = 0;
 
@@ -131,13 +139,15 @@ public class SoulStateManager {
             lastKnownSouls.put(type, soulStack.clone());
             existingSouls++;
             int karma = soulManager.getKarma(soulStack);
-            boolean corrupted = soulManager.isCorrupted(soulStack) || soulManager.isShattered(soulStack);
+            boolean resonanceInvalid = soulManager.isCorrupted(soulStack) || soulManager.isShattered(soulStack);
             karmaBySoul.put(type, karma);
-            corruptedBySoul.put(type, corrupted);
+            corruptedBySoul.put(type, resonanceInvalid);
             totalKarma += karma;
 
-            if (corrupted) {
+            if (resonanceInvalid) {
                 corruptedSouls++;
+            } else {
+                validResonanceSouls++;
             }
         }
 
@@ -146,6 +156,7 @@ public class SoulStateManager {
             state,
             corruptedSouls,
             existingSouls,
+            validResonanceSouls,
             totalKarma,
             Collections.unmodifiableMap(karmaBySoul),
             Collections.unmodifiableMap(corruptedBySoul)
@@ -164,11 +175,7 @@ public class SoulStateManager {
             resonanceHandler.applySoulState(snapshot);
         }
 
-        if (plugin.getSoulAltar() != null) {
-            plugin.getSoulAltar().syncResonancePortal(snapshot);
-        }
-
-        handleResonanceOpenTrigger(snapshot);
+        handleSoulThresholdTrigger(snapshot);
 
         return snapshot;
     }
@@ -183,24 +190,18 @@ public class SoulStateManager {
         return SoulState.HEALTHY;
     }
 
-    private void handleResonanceOpenTrigger(SoulStateSnapshot snapshot) {
-        if (plugin.getSoulAltar() != null && plugin.getSoulAltar().isResonanceForceClosed()) {
-            resonanceOpenEventFired = false;
+    private void handleSoulThresholdTrigger(SoulStateSnapshot snapshot) {
+        boolean thresholdMet = snapshot.meetsResonanceThreshold();
+        if (thresholdMet == resonanceThresholdCurrentlyMet) {
             return;
         }
 
-        boolean canOpenResonance = snapshot.allSoulsExist() && snapshot.corruptedSouls() <= 3;
-        if (!canOpenResonance) {
-            resonanceOpenEventFired = false;
-            return;
+        resonanceThresholdCurrentlyMet = thresholdMet;
+        if (thresholdMet) {
+            Bukkit.getPluginManager().callEvent(new SoulThresholdMetEvent(snapshot));
+        } else {
+            Bukkit.getPluginManager().callEvent(new SoulThresholdLostEvent(snapshot));
         }
-
-        if (resonanceOpenEventFired) {
-            return;
-        }
-
-        resonanceOpenEventFired = true;
-        Bukkit.getPluginManager().callEvent(new ResonanceOpenEvent(snapshot));
     }
 
     private ItemStack findTrackedSoul(SoulType type) {
