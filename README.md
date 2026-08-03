@@ -1,6 +1,6 @@
-# Dams's Soul Covenant
+# Ataraxia Soul Covenant
 
-**Dams's Soul Covenant (DSC)** is a Paper plugin for Minecraft that adds a soul-based progression system, karmic item states, altar interactions, pledge logic, and world-level consequences for the Ataraxia server.
+**Ataraxia Soul Covenant (ASC)** is a Paper plugin for Minecraft that adds a soul-based progression system, karmic item states, altar interactions, pledge logic, and world-level consequences for the Ataraxia server.
 
 The plugin is built around seven souls, each tied to a different style of play. The exact unlock conditions are intentionally not documented here so the progression stays discoverable in-game.
 
@@ -127,7 +127,7 @@ Set `enabled: true` and change the coordinates to your encrypted location when y
 ## Project Structure
 
 ```text
-app/src/main/java/me/st4r/DSC/
+app/src/main/java/me/st4r/ASC/
   altar/           Soul altar logic
   listener/        Gameplay listeners and soul progression hooks
   passive/         Passive effects and effect scheduling

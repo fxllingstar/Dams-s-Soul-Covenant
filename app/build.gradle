@@ -46,5 +46,5 @@ processResources {
 }
 
 base {
-    archivesName = "DSC"
+    archivesName = "ASC"
 }
